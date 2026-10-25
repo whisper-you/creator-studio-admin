@@ -3,8 +3,8 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { nextArticleId } from '../data/schema'
 import { useArticlesStore } from '../store'
 import { ArticlesMutateDrawer } from './articles-mutate-drawer'
-import { ArticlesScheduleDialog } from './articles-schedule-dialog'
 import { useArticles } from './articles-provider'
+import { ArticlesScheduleDialog } from './articles-schedule-dialog'
 
 export function ArticlesDialogs() {
   const { open, setOpen, currentRow, setCurrentRow } = useArticles()

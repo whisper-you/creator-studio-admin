@@ -39,7 +39,9 @@ export function ArticlesBulkActions<TData>({
       to
     )
     const meta = statuses.find((s) => s.value === to)
-    toast.success(`已将 ${selected.length} 篇文章状态更新为「${meta?.label ?? to}」`)
+    toast.success(
+      `已将 ${selected.length} 篇文章状态更新为「${meta?.label ?? to}」`
+    )
     table.resetRowSelection()
   }
 
@@ -62,9 +64,9 @@ export function ArticlesBulkActions<TData>({
   }
 
   const handleBulkDelete = () => {
-    useArticlesStore.getState().deleteArticles(
-      selectedRows.map((row) => (row.original as Article).id)
-    )
+    useArticlesStore
+      .getState()
+      .deleteArticles(selectedRows.map((row) => (row.original as Article).id))
     toast.success(`已删除 ${selectedRows.length} 篇文章。`)
     table.resetRowSelection()
   }

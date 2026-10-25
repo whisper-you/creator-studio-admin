@@ -1,9 +1,9 @@
 import { addDays, format, startOfDay } from 'date-fns'
+import { platformMeta } from '@/features/articles/data/data'
 import {
   ARTICLE_PLATFORMS,
   type Article,
 } from '@/features/articles/data/schema'
-import { platformMeta } from '@/features/articles/data/data'
 
 /**
  * 确定性伪随机:同样的种子永远生成同样的曲线,
@@ -19,13 +19,10 @@ export function mulberry32(seed: number) {
   }
 }
 
-export type TrendPoint = { date: string; 阅读: number; 点赞: number }
+type TrendPoint = { date: string; 阅读: number; 点赞: number }
 
 /** 近 N 天阅读/点赞趋势(由文章数据推导 + 平滑噪声) */
-export function buildTrendSeries(
-  articles: Article[],
-  days = 30
-): TrendPoint[] {
+export function buildTrendSeries(articles: Article[], days = 30): TrendPoint[] {
   const rnd = mulberry32(42)
   const today = startOfDay(new Date())
   const published = articles.filter((a) => a.status === 'published')
@@ -54,7 +51,10 @@ export function buildTrendSeries(
 export function buildFunnel(articles: Article[]) {
   return [
     { stage: '创作', value: articles.length },
-    { stage: '发布', value: articles.filter((a) => a.status === 'published').length },
+    {
+      stage: '发布',
+      value: articles.filter((a) => a.status === 'published').length,
+    },
     { stage: '获得阅读', value: articles.filter((a) => a.views > 0).length },
     { stage: '获得互动', value: articles.filter((a) => a.likes > 0).length },
   ]
@@ -73,4 +73,8 @@ export function buildPlatformStats(articles: Article[]) {
 }
 
 export const fmtCount = (n: number) =>
-  n >= 10000 ? `${(n / 10000).toFixed(1)}w` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`
+  n >= 10000
+    ? `${(n / 10000).toFixed(1)}w`
+    : n >= 1000
+      ? `${(n / 1000).toFixed(1)}k`
+      : `${n}`

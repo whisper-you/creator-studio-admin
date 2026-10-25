@@ -125,10 +125,10 @@ describe('UserAuthForm', () => {
     })
 
     it('surfaces the error and does not navigate on wrong credentials', async () => {
-      const axiosLikeError = Object.assign(
-        new Error('邮箱或密码错误'),
-        { isAxiosError: true, response: { status: 401, data: { message: '邮箱或密码错误' } } }
-      )
+      const axiosLikeError = Object.assign(new Error('邮箱或密码错误'), {
+        isAxiosError: true,
+        response: { status: 401, data: { message: '邮箱或密码错误' } },
+      })
       mocks.login.mockRejectedValue(axiosLikeError)
 
       await userEvent.fill(emailInput, 'a@b.com')

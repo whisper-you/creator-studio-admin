@@ -1,6 +1,5 @@
 import { faker } from '@faker-js/faker'
 import {
-  ARTICLE_CATEGORIES,
   ARTICLE_PLATFORMS,
   type Article,
   type ArticleCategory,
@@ -132,17 +131,13 @@ export const articles: Article[] = Array.from({ length: 56 }, (_, i) => {
     tags: faker.helpers.arrayElements(tagPool, { min: 1, max: 3 }),
     platforms,
     views,
-    likes: views > 0 ? Math.round(views * faker.number.float({ min: 0.02, max: 0.09 })) : 0,
+    likes:
+      views > 0
+        ? Math.round(views * faker.number.float({ min: 0.02, max: 0.09 }))
+        : 0,
     scheduledAt,
     publishedAt,
     createdAt,
     updatedAt: faker.date.recent({ days: 7, refDate: new Date() }),
   }
 })
-
-// 导出几组常用派生数据,供日历/总览直接使用
-export const scheduledArticles = articles.filter(
-  (a) => a.status === 'scheduled' && a.scheduledAt
-)
-
-export { ARTICLE_CATEGORIES, ARTICLE_PLATFORMS }

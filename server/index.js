@@ -33,7 +33,6 @@ app.use((err, _req, res, _next) => {
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
 if (isMain) {
   app.listen(PORT, () => {
-    // eslint-disable-next-line no-console
     console.log(`[api] Creator Studio API 已启动:http://localhost:${PORT}`)
   })
 }

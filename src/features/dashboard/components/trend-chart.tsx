@@ -21,12 +21,28 @@ export function TrendChart() {
       <AreaChart data={data} margin={{ left: 8, right: 8 }}>
         <defs>
           <linearGradient id='fillViews' x1='0' y1='0' x2='0' y2='1'>
-            <stop offset='5%' stopColor='var(--color-primary)' stopOpacity={0.8} />
-            <stop offset='95%' stopColor='var(--color-primary)' stopOpacity={0.1} />
+            <stop
+              offset='5%'
+              stopColor='var(--color-primary)'
+              stopOpacity={0.8}
+            />
+            <stop
+              offset='95%'
+              stopColor='var(--color-primary)'
+              stopOpacity={0.1}
+            />
           </linearGradient>
           <linearGradient id='fillLikes' x1='0' y1='0' x2='0' y2='1'>
-            <stop offset='5%' stopColor='var(--color-chart-2)' stopOpacity={0.8} />
-            <stop offset='95%' stopColor='var(--color-chart-2)' stopOpacity={0.1} />
+            <stop
+              offset='5%'
+              stopColor='var(--color-chart-2)'
+              stopOpacity={0.8}
+            />
+            <stop
+              offset='95%'
+              stopColor='var(--color-chart-2)'
+              stopOpacity={0.1}
+            />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} strokeDasharray='3 3' />

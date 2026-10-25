@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import useDialogState from '@/hooks/use-dialog-state'
-import { useArticlesStore } from '../store'
 import { type Article } from '../data/schema'
+import { useArticlesStore } from '../store'
 
-export type ArticlesDialogType =
+type ArticlesDialogType =
   | 'create'
   | 'update'
   | 'delete'

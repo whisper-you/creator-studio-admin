@@ -36,7 +36,9 @@ describe('nextArticleId', () => {
   })
 
   it('按最大序号自增并补零', () => {
-    expect(nextArticleId([{ id: 'ART-041' }, { id: 'ART-007' }])).toBe('ART-042')
+    expect(nextArticleId([{ id: 'ART-041' }, { id: 'ART-007' }])).toBe(
+      'ART-042'
+    )
   })
 
   it('忽略无法解析的 ID', () => {

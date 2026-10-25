@@ -22,7 +22,9 @@ export function GeneralError({
         )}
         <span className='font-medium'>哎呀,出了点问题 {`:')`}</span>
         <p className='text-center text-muted-foreground'>
-          给你带来不便非常抱歉。<br />请稍后再试。
+          给你带来不便非常抱歉。
+          <br />
+          请稍后再试。
         </p>
         {import.meta.env.DEV && error && (
           <pre className='max-w-3xl overflow-auto rounded-md bg-muted p-4 text-start text-xs whitespace-pre-wrap'>

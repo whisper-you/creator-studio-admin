@@ -12,7 +12,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 })
 
-export function signToken(user) {
+function signToken(user) {
   return jwt.sign({ sub: String(user.id), email: user.email }, JWT_SECRET, {
     expiresIn: TOKEN_TTL,
   })

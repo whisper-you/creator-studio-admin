@@ -1,8 +1,6 @@
 import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { ArrowUpRight, Eye } from 'lucide-react'
-import { useArticlesStore } from '@/features/articles/store'
-import { platformMeta } from '@/features/articles/data/data'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -11,6 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { platformMeta } from '@/features/articles/data/data'
+import { useArticlesStore } from '@/features/articles/store'
 import { fmtCount } from '../data/stats'
 
 /** 最近发布的文章(数据与文章管理实时共享) */
@@ -34,7 +34,8 @@ export function RecentArticles() {
       <CardHeader>
         <CardTitle>最近发布</CardTitle>
         <CardDescription>
-          共发布 {articles.filter((a) => a.status === 'published').length} 篇文章
+          共发布 {articles.filter((a) => a.status === 'published').length}{' '}
+          篇文章
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-4'>

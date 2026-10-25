@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildFunnel, buildPlatformStats, buildTrendSeries, mulberry32 } from './stats'
 import { type Article } from '@/features/articles/data/schema'
+import {
+  buildFunnel,
+  buildPlatformStats,
+  buildTrendSeries,
+  mulberry32,
+} from './stats'
 
 const article = (over: Partial<Article>): Article => ({
   id: 'ART-001',
@@ -64,7 +69,12 @@ describe('buildFunnel 漏斗单调不增', () => {
 describe('buildPlatformStats', () => {
   it('阅读按渠道数均摊并只保留有数据的渠道', () => {
     const stats = buildPlatformStats([
-      article({ id: '1', status: 'published', views: 100, platforms: ['website', 'zhihu'] }),
+      article({
+        id: '1',
+        status: 'published',
+        views: 100,
+        platforms: ['website', 'zhihu'],
+      }),
       article({ id: '2', status: 'draft', views: 0, platforms: ['bilibili'] }),
     ])
     const byName = Object.fromEntries(stats.map((s) => [s.platform, s.views]))

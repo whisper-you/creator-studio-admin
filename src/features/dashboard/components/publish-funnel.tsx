@@ -1,5 +1,12 @@
 import { useMemo } from 'react'
-import { Cell, Funnel, FunnelChart, LabelList, ResponsiveContainer, Tooltip } from 'recharts'
+import {
+  Cell,
+  Funnel,
+  FunnelChart,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+} from 'recharts'
 import { useArticlesStore } from '@/features/articles/store'
 import { buildFunnel } from '../data/stats'
 
@@ -18,9 +25,7 @@ export function PublishFunnel() {
   return (
     <ResponsiveContainer width='100%' height={280}>
       <FunnelChart>
-        <Tooltip
-          formatter={(value, name) => [`${value} 篇`, name as string]}
-        />
+        <Tooltip formatter={(value, name) => [`${value} 篇`, name as string]} />
         <Funnel dataKey='value' data={data} isAnimationActive={false}>
           {data.map((entry, i) => (
             <Cell key={entry.stage} fill={COLORS[i % COLORS.length]} />

@@ -1,4 +1,4 @@
-export type Material = {
+type Material = {
   name: string
   type: '标题公式' | '封面模板' | '话题灵感' | '数据报告'
   scene: string

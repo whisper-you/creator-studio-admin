@@ -1,5 +1,5 @@
-import { type ColumnDef } from '@tanstack/react-table'
 import { format } from 'date-fns'
+import { type ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DataTableColumnHeader } from '@/components/data-table'
@@ -59,7 +59,9 @@ export const articlesColumns: ColumnDef<Article>[] = [
         <div className='flex flex-col gap-1 py-1'>
           <div className='flex items-center space-x-2'>
             {category && <Badge variant='outline'>{category.label}</Badge>}
-            <span className='truncate font-medium'>{row.getValue('title')}</span>
+            <span className='truncate font-medium'>
+              {row.getValue('title')}
+            </span>
           </div>
           {row.original.tags.length > 0 && (
             <div className='flex gap-1 text-xs text-muted-foreground'>
@@ -159,8 +161,8 @@ export const articlesColumns: ColumnDef<Article>[] = [
     ),
     accessorFn: (row) => row.publishedAt ?? row.scheduledAt,
     sortingFn: (rowA, rowB, columnId) => {
-      const a = (rowA.getValue<Date | undefined>(columnId)?.getTime() ?? 0)
-      const b = (rowB.getValue<Date | undefined>(columnId)?.getTime() ?? 0)
+      const a = rowA.getValue<Date | undefined>(columnId)?.getTime() ?? 0
+      const b = rowB.getValue<Date | undefined>(columnId)?.getTime() ?? 0
       return a - b
     },
     cell: ({ row }) => {
@@ -169,7 +171,7 @@ export const articlesColumns: ColumnDef<Article>[] = [
         return <span className='tabular-nums'>发布 {fmtDate(publishedAt)}</span>
       if (status === 'scheduled' && scheduledAt)
         return (
-          <span className='tabular-nums text-blue-600 dark:text-blue-400'>
+          <span className='text-blue-600 tabular-nums dark:text-blue-400'>
             排期 {fmtDate(scheduledAt)}
           </span>
         )

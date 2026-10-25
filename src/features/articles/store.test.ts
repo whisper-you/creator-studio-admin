@@ -115,7 +115,9 @@ describe('useArticlesStore(server 模式:乐观更新与回滚)', () => {
 
   it('transitionStatus:published 时自动写入 publishedAt 并清空排期', () => {
     useArticlesStore.setState({
-      articles: [base({ status: 'scheduled', scheduledAt: new Date('2026-10-28') })],
+      articles: [
+        base({ status: 'scheduled', scheduledAt: new Date('2026-10-28') }),
+      ],
     })
 
     useArticlesStore.getState().transitionStatus(['ART-001'], 'published')
@@ -136,7 +138,9 @@ describe('useArticlesStore(server 模式:乐观更新与回滚)', () => {
 
   it('unscheduleArticle:退回草稿并清空排期', () => {
     useArticlesStore.setState({
-      articles: [base({ status: 'scheduled', scheduledAt: new Date('2026-10-28') })],
+      articles: [
+        base({ status: 'scheduled', scheduledAt: new Date('2026-10-28') }),
+      ],
     })
 
     useArticlesStore.getState().unscheduleArticle('ART-001')

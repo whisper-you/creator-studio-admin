@@ -9,14 +9,8 @@ import {
 const articlesSearchSchema = z.object({
   page: z.number().optional().catch(1),
   pageSize: z.number().optional().catch(10),
-  status: z
-    .array(z.enum(ARTICLE_STATUSES))
-    .optional()
-    .catch([]),
-  category: z
-    .array(z.enum(ARTICLE_CATEGORIES))
-    .optional()
-    .catch([]),
+  status: z.array(z.enum(ARTICLE_STATUSES)).optional().catch([]),
+  category: z.array(z.enum(ARTICLE_CATEGORIES)).optional().catch([]),
   filter: z.string().optional().catch(''),
 })
 

@@ -63,7 +63,12 @@ export const platforms: {
   icon: LucideIcon
   color: string
 }[] = [
-  { label: '个人网站', value: 'website', icon: Globe, color: 'text-emerald-600' },
+  {
+    label: '个人网站',
+    value: 'website',
+    icon: Globe,
+    color: 'text-emerald-600',
+  },
   {
     label: '微信公众号',
     value: 'wechat',

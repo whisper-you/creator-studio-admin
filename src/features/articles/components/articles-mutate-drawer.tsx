@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { z } from 'zod'
+import { format } from 'date-fns'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 import { bestPublishHour } from '@/lib/best-publish-time'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -68,7 +68,16 @@ const formSchema = z.object({
   content: z.string(),
   tags: z.string(),
   platforms: z
-    .array(z.enum(['website', 'wechat', 'zhihu', 'xiaohongshu', 'juejin', 'bilibili']))
+    .array(
+      z.enum([
+        'website',
+        'wechat',
+        'zhihu',
+        'xiaohongshu',
+        'juejin',
+        'bilibili',
+      ])
+    )
     .min(1, '至少选择一个发布渠道'),
   scheduledAt: z.date().optional(),
 })
@@ -92,7 +101,9 @@ export function ArticlesMutateDrawer({
 
   // 编辑时只能停留在当前状态或按状态机流转;新建可选任意初始状态
   const statusOptions = (
-    isUpdate ? [currentRow.status, ...statusFlow[currentRow.status]] : [...ARTICLE_STATUSES]
+    isUpdate
+      ? [currentRow.status, ...statusFlow[currentRow.status]]
+      : [...ARTICLE_STATUSES]
   ).map((s) => {
     const meta = statuses.find((x) => x.value === s)!
     return { label: meta.label, value: meta.value }
@@ -231,10 +242,7 @@ export function ArticlesMutateDrawer({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>分类</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
+                    <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className='w-full'>
                           <SelectValue />
@@ -258,10 +266,7 @@ export function ArticlesMutateDrawer({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>状态</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
+                    <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className='w-full'>
                           <SelectValue />

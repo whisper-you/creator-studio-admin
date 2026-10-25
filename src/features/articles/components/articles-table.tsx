@@ -78,9 +78,7 @@ export function ArticlesTable() {
       return (
         row.original.id.toLowerCase().includes(searchValue) ||
         row.original.title.toLowerCase().includes(searchValue) ||
-        row.original.tags.some((tag) =>
-          tag.toLowerCase().includes(searchValue)
-        )
+        row.original.tags.some((tag) => tag.toLowerCase().includes(searchValue))
       )
     },
     getCoreRowModel: getCoreRowModel(),

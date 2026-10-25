@@ -34,7 +34,11 @@ export function PlatformDistribution() {
           width={72}
         />
         <Tooltip formatter={(value) => [fmtCount(Number(value)), '阅读量']} />
-        <Bar dataKey='views' fill='var(--color-chart-2)' radius={[0, 4, 4, 0]} />
+        <Bar
+          dataKey='views'
+          fill='var(--color-chart-2)'
+          radius={[0, 4, 4, 0]}
+        />
       </BarChart>
     </ResponsiveContainer>
   )

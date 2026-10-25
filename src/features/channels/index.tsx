@@ -43,16 +43,15 @@ export function Channels() {
   const [searchTerm, setSearchTerm] = useState(filter)
   // 绑定状态:演示为前端内存态,接后端后改为请求
   const [connectedSet, setConnectedSet] = useState<Set<string>>(
-    () =>
-      new Set(
-        initialChannels.filter((c) => c.connected).map((c) => c.name)
-      )
+    () => new Set(initialChannels.filter((c) => c.connected).map((c) => c.name))
   )
 
   const filteredChannels = initialChannels
     .slice()
     .sort((a, b) =>
-      sort === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)
+      sort === 'asc'
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name)
     )
     .filter((c) =>
       channelType === 'connected'

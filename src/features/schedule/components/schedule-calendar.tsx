@@ -13,10 +13,10 @@ import { zhCN } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { bestPublishHour, BEST_PUBLISH_TIP } from '@/lib/best-publish-time'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { useArticles } from '@/features/articles/components/articles-provider'
 import { useArticlesStore } from '@/features/articles/store'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -55,7 +55,8 @@ export function ScheduleCalendar() {
     // 同一天内按排期小时排序
     for (const list of map.values()) {
       list.sort(
-        (a, b) => (a.scheduledAt?.getHours() ?? 0) - (b.scheduledAt?.getHours() ?? 0)
+        (a, b) =>
+          (a.scheduledAt?.getHours() ?? 0) - (b.scheduledAt?.getHours() ?? 0)
       )
     }
     return map
@@ -76,7 +77,9 @@ export function ScheduleCalendar() {
   }
 
   const shiftMonth = (delta: number) =>
-    setMonth((m) => startOfMonth(new Date(m.getFullYear(), m.getMonth() + delta, 1)))
+    setMonth((m) =>
+      startOfMonth(new Date(m.getFullYear(), m.getMonth() + delta, 1))
+    )
 
   return (
     <div className='flex min-w-0 flex-1 flex-col gap-3 rounded-lg border p-3'>
@@ -151,7 +154,8 @@ export function ScheduleCalendar() {
               className={cn(
                 'flex min-h-24 flex-col gap-1 bg-background p-1.5 transition-colors sm:min-h-28',
                 !inMonth && 'bg-muted/40',
-                dragOverDay === key && 'bg-primary/10 ring-1 ring-inset ring-primary/50',
+                dragOverDay === key &&
+                  'bg-primary/10 ring-1 ring-primary/50 ring-inset',
                 isToday(day) && 'bg-primary/5'
               )}
             >
@@ -168,12 +172,15 @@ export function ScheduleCalendar() {
                 >
                   {day.getDate()}
                 </span>
-                {canSchedule && inMonth && isBestDay && dayArticles.length === 0 && (
-                  <span className='hidden items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 sm:flex'>
-                    <Sparkles className='size-3' />
-                    推荐 {bestPublishHour(day)}:00
-                  </span>
-                )}
+                {canSchedule &&
+                  inMonth &&
+                  isBestDay &&
+                  dayArticles.length === 0 && (
+                    <span className='hidden items-center gap-0.5 text-[10px] text-amber-600 sm:flex dark:text-amber-400'>
+                      <Sparkles className='size-3' />
+                      推荐 {bestPublishHour(day)}:00
+                    </span>
+                  )}
               </div>
 
               <div className='flex min-h-0 flex-1 flex-col gap-1'>
@@ -193,9 +200,9 @@ export function ScheduleCalendar() {
                         setOpen('schedule')
                       }}
                       title={`${String(hour).padStart(2, '0')}:00 · ${a.title}`}
-                      className='flex cursor-grab items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[11px] leading-tight hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950 dark:hover:bg-blue-900 active:cursor-grabbing'
+                      className='flex cursor-grab items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[11px] leading-tight hover:bg-blue-100 active:cursor-grabbing dark:border-blue-800 dark:bg-blue-950 dark:hover:bg-blue-900'
                     >
-                      <span className='shrink-0 tabular-nums text-muted-foreground'>
+                      <span className='shrink-0 text-muted-foreground tabular-nums'>
                         {String(hour).padStart(2, '0')}
                       </span>
                       {isBest && (
@@ -217,7 +224,8 @@ export function ScheduleCalendar() {
       </div>
 
       <p className='text-xs text-muted-foreground'>
-        拖动左侧「待排期」文章到日期格完成排期 · 拖动蓝色卡片可改期 · 点击卡片调整时间
+        拖动左侧「待排期」文章到日期格完成排期 · 拖动蓝色卡片可改期 ·
+        点击卡片调整时间
         {scheduledByDay.size > 0 && ` · 本月共 ${scheduledByDay.size} 天有排期`}
       </p>
     </div>

@@ -1,7 +1,8 @@
-import { create } from 'zustand'
-import { createJSONStorage, persist } from 'zustand/middleware'
 import { z } from 'zod'
 import { toast } from 'sonner'
+import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { articlesApi } from '@/lib/api'
 import { articles as seedArticles } from './data/articles'
 import {
   articleSchema,
@@ -9,7 +10,6 @@ import {
   type Article,
   type ArticleStatus,
 } from './data/schema'
-import { articlesApi } from '@/lib/api'
 
 /**
  * 文章全局数据仓库。
@@ -46,7 +46,10 @@ export const useArticlesStore = create<ArticlesState>()(
   persist(
     (set, get) => {
       /** 乐观更新骨架:先本地生效,服务端失败时回滚 */
-      const optimistic = (mutate: () => Article[], sync: () => Promise<void>) => {
+      const optimistic = (
+        mutate: () => Article[],
+        sync: () => Promise<void>
+      ) => {
         const prev = get().articles
         set({ articles: mutate() })
         if (get().mode !== 'server') return
@@ -135,7 +138,9 @@ export const useArticlesStore = create<ArticlesState>()(
                 ...a,
                 status: to,
                 publishedAt:
-                  to === 'published' ? (a.publishedAt ?? new Date()) : a.publishedAt,
+                  to === 'published'
+                    ? (a.publishedAt ?? new Date())
+                    : a.publishedAt,
                 scheduledAt:
                   a.status === 'scheduled' && to !== 'scheduled'
                     ? undefined

@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type Channel = {
+type Channel = {
   name: string
   icon: LucideIcon
   color: string

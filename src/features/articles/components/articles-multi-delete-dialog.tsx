@@ -89,9 +89,7 @@ export function ArticlesMultiDeleteDialog<TData>({
 
           <Alert variant='destructive'>
             <AlertTitle>警告!</AlertTitle>
-            <AlertDescription>
-              请谨慎操作,该操作无法回滚。
-            </AlertDescription>
+            <AlertDescription>请谨慎操作,该操作无法回滚。</AlertDescription>
           </Alert>
         </form>
       }
