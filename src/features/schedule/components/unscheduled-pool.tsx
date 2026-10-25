@@ -37,7 +37,7 @@ export function UnscheduledPool() {
         把文章拖到右侧日期格完成排期;点击卡片也可以直接选日期。
       </p>
 
-      <ScrollArea className='flex-1'>
+      <ScrollArea className='min-h-0 flex-1'>
         <div className='flex flex-col gap-2 pe-2'>
           {pool.map((a) => {
             const category = categoryMeta(a.category)

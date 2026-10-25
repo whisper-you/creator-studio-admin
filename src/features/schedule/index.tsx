@@ -25,7 +25,8 @@ export function Schedule() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 lg:flex-row'>
-        <div className='h-72 shrink-0 lg:h-auto lg:w-72'>
+        {/* 移动端限高避免占满整屏;桌面端与日历等高排布 */}
+        <div className='h-80 shrink-0 lg:h-auto lg:w-72'>
           <UnscheduledPool />
         </div>
         <ScheduleCalendar />

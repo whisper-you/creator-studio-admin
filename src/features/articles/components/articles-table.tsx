@@ -128,7 +128,7 @@ export function ArticlesTable() {
           },
         ]}
       />
-      <div className='overflow-hidden rounded-md border'>
+      <div className='overflow-x-auto rounded-md border'>
         <Table className='min-w-xl'>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

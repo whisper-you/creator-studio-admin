@@ -122,105 +122,112 @@ export function ScheduleCalendar() {
         </p>
       </div>
 
-      {/* ===== 星期表头 ===== */}
-      <div className='grid grid-cols-7 gap-px text-center text-xs text-muted-foreground'>
-        {WEEK_LABELS.map((w) => (
-          <div key={w} className='py-1'>
-            周{w}
+      {/* ===== 星期表头 + 日期网格(窄屏横向滚动) ===== */}
+      <div className='min-h-0 flex-1 overflow-x-auto pb-1'>
+        <div className='min-w-[640px]'>
+          <div className='grid grid-cols-7 gap-px text-center text-xs text-muted-foreground'>
+            {WEEK_LABELS.map((w) => (
+              <div key={w} className='py-1'>
+                周{w}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* ===== 日期网格 ===== */}
-      <div className='grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-md border bg-border'>
-        {days.map((day) => {
-          const key = format(day, 'yyyy-MM-dd')
-          const dayArticles = scheduledByDay.get(key) ?? []
-          const inMonth = isSameMonth(day, month)
-          const canSchedule = day >= new Date(new Date().setHours(0, 0, 0, 0))
-          const isBestDay = day.getDay() >= 1 && day.getDay() <= 5
+          {/* ===== 日期网格 ===== */}
+          <div className='mt-1 grid h-full grid-cols-7 grid-rows-6 gap-px overflow-hidden rounded-md border bg-border'>
+            {days.map((day) => {
+              const key = format(day, 'yyyy-MM-dd')
+              const dayArticles = scheduledByDay.get(key) ?? []
+              const inMonth = isSameMonth(day, month)
+              const canSchedule =
+                day >= new Date(new Date().setHours(0, 0, 0, 0))
+              const isBestDay = day.getDay() >= 1 && day.getDay() <= 5
 
-          return (
-            <div
-              key={key}
-              onDragOver={(e) => {
-                if (!canSchedule) return
-                e.preventDefault()
-                e.dataTransfer.dropEffect = 'move'
-                setDragOverDay(key)
-              }}
-              onDragLeave={() => setDragOverDay((k) => (k === key ? null : k))}
-              onDrop={(e) => handleDrop(e, day)}
-              className={cn(
-                'flex min-h-24 flex-col gap-1 bg-background p-1.5 transition-colors sm:min-h-28',
-                !inMonth && 'bg-muted/40',
-                dragOverDay === key &&
-                  'bg-primary/10 ring-1 ring-primary/50 ring-inset',
-                isToday(day) && 'bg-primary/5'
-              )}
-            >
-              <div className='flex items-center justify-between'>
-                <span
+              return (
+                <div
+                  key={key}
+                  onDragOver={(e) => {
+                    if (!canSchedule) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    setDragOverDay(key)
+                  }}
+                  onDragLeave={() =>
+                    setDragOverDay((k) => (k === key ? null : k))
+                  }
+                  onDrop={(e) => handleDrop(e, day)}
                   className={cn(
-                    'inline-flex size-6 items-center justify-center rounded-full text-xs tabular-nums',
-                    isToday(day)
-                      ? 'bg-primary font-semibold text-primary-foreground'
-                      : inMonth
-                        ? 'text-foreground'
-                        : 'text-muted-foreground/50'
+                    'flex min-h-24 flex-col gap-1 bg-background p-1.5 transition-colors sm:min-h-28',
+                    !inMonth && 'bg-muted/40',
+                    dragOverDay === key &&
+                      'bg-primary/10 ring-1 ring-primary/50 ring-inset',
+                    isToday(day) && 'bg-primary/5'
                   )}
                 >
-                  {day.getDate()}
-                </span>
-                {canSchedule &&
-                  inMonth &&
-                  isBestDay &&
-                  dayArticles.length === 0 && (
-                    <span className='hidden items-center gap-0.5 text-[10px] text-amber-600 sm:flex dark:text-amber-400'>
-                      <Sparkles className='size-3' />
-                      推荐 {bestPublishHour(day)}:00
-                    </span>
-                  )}
-              </div>
-
-              <div className='flex min-h-0 flex-1 flex-col gap-1'>
-                {dayArticles.slice(0, 3).map((a) => {
-                  const hour = a.scheduledAt?.getHours() ?? 0
-                  const isBest = hour === bestPublishHour(day)
-                  return (
-                    <div
-                      key={a.id}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('text/plain', a.id)
-                        e.dataTransfer.effectAllowed = 'move'
-                      }}
-                      onClick={() => {
-                        setCurrentRow(a)
-                        setOpen('schedule')
-                      }}
-                      title={`${String(hour).padStart(2, '0')}:00 · ${a.title}`}
-                      className='flex cursor-grab items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[11px] leading-tight hover:bg-blue-100 active:cursor-grabbing dark:border-blue-800 dark:bg-blue-950 dark:hover:bg-blue-900'
-                    >
-                      <span className='shrink-0 text-muted-foreground tabular-nums'>
-                        {String(hour).padStart(2, '0')}
-                      </span>
-                      {isBest && (
-                        <Sparkles className='size-2.5 shrink-0 text-amber-500' />
+                  <div className='flex items-center justify-between'>
+                    <span
+                      className={cn(
+                        'inline-flex size-6 items-center justify-center rounded-full text-xs tabular-nums',
+                        isToday(day)
+                          ? 'bg-primary font-semibold text-primary-foreground'
+                          : inMonth
+                            ? 'text-foreground'
+                            : 'text-muted-foreground/50'
                       )}
-                      <span className='truncate'>{a.title}</span>
-                    </div>
-                  )
-                })}
-                {dayArticles.length > 3 && (
-                  <span className='px-1 text-[11px] text-muted-foreground'>
-                    +{dayArticles.length - 3} 篇
-                  </span>
-                )}
-              </div>
-            </div>
-          )
-        })}
+                    >
+                      {day.getDate()}
+                    </span>
+                    {canSchedule &&
+                      inMonth &&
+                      isBestDay &&
+                      dayArticles.length === 0 && (
+                        <span className='hidden items-center gap-0.5 text-[10px] text-amber-600 sm:flex dark:text-amber-400'>
+                          <Sparkles className='size-3' />
+                          推荐 {bestPublishHour(day)}:00
+                        </span>
+                      )}
+                  </div>
+
+                  <div className='flex min-h-0 flex-1 flex-col gap-1'>
+                    {dayArticles.slice(0, 3).map((a) => {
+                      const hour = a.scheduledAt?.getHours() ?? 0
+                      const isBest = hour === bestPublishHour(day)
+                      return (
+                        <div
+                          key={a.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', a.id)
+                            e.dataTransfer.effectAllowed = 'move'
+                          }}
+                          onClick={() => {
+                            setCurrentRow(a)
+                            setOpen('schedule')
+                          }}
+                          title={`${String(hour).padStart(2, '0')}:00 · ${a.title}`}
+                          className='flex cursor-grab items-center gap-1 rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[11px] leading-tight hover:bg-blue-100 active:cursor-grabbing dark:border-blue-800 dark:bg-blue-950 dark:hover:bg-blue-900'
+                        >
+                          <span className='shrink-0 text-muted-foreground tabular-nums'>
+                            {String(hour).padStart(2, '0')}
+                          </span>
+                          {isBest && (
+                            <Sparkles className='size-2.5 shrink-0 text-amber-500' />
+                          )}
+                          <span className='truncate'>{a.title}</span>
+                        </div>
+                      )
+                    })}
+                    {dayArticles.length > 3 && (
+                      <span className='px-1 text-[11px] text-muted-foreground'>
+                        +{dayArticles.length - 3} 篇
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       <p className='text-xs text-muted-foreground'>

@@ -1,9 +1,15 @@
 import { format } from 'date-fns'
 import { type ColumnDef } from '@tanstack/react-table'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DataTableColumnHeader } from '@/components/data-table'
-import { categoryMeta, platformMeta, statusMeta } from '../data/data'
+import {
+  categoryMeta,
+  platformMeta,
+  statusMeta,
+  statusToneClass,
+} from '../data/data'
 import { type Article } from '../data/schema'
 import { ArticlesRowActions } from './articles-row-actions'
 
@@ -64,7 +70,7 @@ export const articlesColumns: ColumnDef<Article>[] = [
             </span>
           </div>
           {row.original.tags.length > 0 && (
-            <div className='flex gap-1 text-xs text-muted-foreground'>
+            <div className='hidden gap-1 text-xs text-muted-foreground sm:flex'>
               {row.original.tags.map((tag) => (
                 <span key={tag} className='rounded bg-muted px-1.5 py-0.5'>
                   # {tag}
@@ -88,9 +94,11 @@ export const articlesColumns: ColumnDef<Article>[] = [
       return (
         <div className='flex w-25 items-center gap-2'>
           {status.icon && (
-            <status.icon className='size-4 text-muted-foreground' />
+            <status.icon
+              className={cn('size-4', statusToneClass[row.original.status])}
+            />
           )}
-          <span>{status.label}</span>
+          <span className='font-medium'>{status.label}</span>
         </div>
       )
     },

@@ -14,7 +14,16 @@
     @apply overflow-x-hidden;
   }
   body {
-    @apply min-h-svh w-full bg-background text-foreground has-[div[data-variant='inset']]:bg-sidebar;
+    @apply min-h-svh w-full bg-background text-foreground antialiased has-[div[data-variant='inset']]:bg-sidebar;
+    /* 表格与指标里的数字用等宽数字,纵向更整齐 */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 中文标题按语言断行优化,避免标点悬挂突兀 */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 
   /* Override Radix scroll locking for sticky headers */

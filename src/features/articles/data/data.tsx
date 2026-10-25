@@ -39,6 +39,15 @@ export const statuses: {
 export const statusMeta = (status: ArticleStatus) =>
   statuses.find((s) => s.value === status)
 
+// 状态语义色:让流水线状态一眼可辨(草稿灰 / 审核琥珀 / 排期蓝 / 发布绿 / 归档灰)
+export const statusToneClass: Record<ArticleStatus, string> = {
+  draft: 'text-zinc-600 dark:text-zinc-400',
+  in_review: 'text-amber-600 dark:text-amber-400',
+  scheduled: 'text-blue-600 dark:text-blue-400',
+  published: 'text-emerald-600 dark:text-emerald-400',
+  archived: 'text-zinc-400 dark:text-zinc-600',
+}
+
 // ============ 分类展示元数据 ============
 
 export const categories: {
