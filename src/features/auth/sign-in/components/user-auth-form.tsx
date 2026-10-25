@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { isAxiosError } from 'axios'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Loader2, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { IconGithub } from '@/assets/brand-icons'
 import { useAuthStore } from '@/stores/auth-store'
+import { authApi } from '@/lib/api'
 import { sleep, cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,7 +43,6 @@ export function UserAuthForm({
 }: UserAuthFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
-  const { auth } = useAuthStore()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -54,31 +55,56 @@ export function UserAuthForm({
   function onSubmit(data: z.infer<typeof formSchema>) {
     setIsLoading(true)
 
-    toast.promise(sleep(2000), {
-      loading: '正在登录...',
-      success: () => {
-        setIsLoading(false)
-
-        // Mock successful authentication with expiry computed at success time
-        const mockUser = {
-          accountNo: 'ACC001',
-          email: data.email,
-          role: ['user'],
-          exp: Date.now() + 24 * 60 * 60 * 1000, // 24 hours from now
-        }
-
-        // Set user and access token
-        auth.setUser(mockUser)
-        auth.setAccessToken('mock-access-token')
-
-        // Redirect to the stored location or default to dashboard
+    toast.promise(
+      (async () => {
+        const { auth } = useAuthStore.getState()
         const targetPath = redirectTo || '/'
-        navigate({ to: targetPath, replace: true })
 
-        return `欢迎回来,${data.email}!`
-      },
-      error: '出错了',
-    })
+        try {
+          // 先请求真实后端(Express + JWT)
+          const res = await authApi.login(data.email, data.password)
+          auth.setUser({
+            accountNo: res.user.id,
+            email: res.user.email,
+            role: ['user'],
+            exp: Date.now() + 24 * 60 * 60 * 1000,
+          })
+          auth.setAccessToken(res.accessToken)
+          setIsLoading(false)
+          navigate({ to: targetPath, replace: true })
+          return `欢迎回来,${res.user.name || res.user.email}!`
+        } catch (err) {
+          setIsLoading(false)
+          if (isAxiosError(err) && err.response) {
+            // 后端在线但拒绝了请求(如 401)——不降级,把原因报给用户
+            const message =
+              (err.response.data as { message?: string })?.message ?? '登录失败'
+            throw new Error(message, { cause: err })
+          }
+
+          // 后端未启动:离线演示模式(保留 mock 鉴权)
+          await sleep(1200)
+          auth.setUser({
+            accountNo: 'ACC001',
+            email: data.email,
+            role: ['user'],
+            exp: Date.now() + 24 * 60 * 60 * 1000,
+          })
+          auth.setAccessToken('mock-access-token')
+          navigate({ to: targetPath, replace: true })
+          toast.message('离线演示模式', {
+            description:
+              '后端未启动,数据仅保存在本地;运行 pnpm dev:all 可启用完整功能。',
+          })
+          return `欢迎回来,${data.email}!`
+        }
+      })(),
+      {
+        loading: '正在登录...',
+        success: (msg) => msg,
+        error: (err: Error) => err.message,
+      }
+    )
   }
 
   return (

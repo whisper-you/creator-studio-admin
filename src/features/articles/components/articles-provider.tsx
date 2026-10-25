@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import useDialogState from '@/hooks/use-dialog-state'
+import { useArticlesStore } from '../store'
 import { type Article } from '../data/schema'
 
 export type ArticlesDialogType =
@@ -25,6 +26,11 @@ const ArticlesContext = React.createContext<ArticlesContextType | null>(null)
 export function ArticlesProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useDialogState<ArticlesDialogType>(null)
   const [currentRow, setCurrentRow] = useState<Article | null>(null)
+
+  // 进入应用时尝试从后端拉取文章;后端未启动则自动保持离线演示模式
+  useEffect(() => {
+    void useArticlesStore.getState().hydrate()
+  }, [])
 
   return (
     <ArticlesContext value={{ open, setOpen, currentRow, setCurrentRow }}>

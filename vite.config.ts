@@ -21,6 +21,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      // 开发环境把 /api 代理到本地 Express 后端(pnpm server)
+      '/api': 'http://localhost:5180',
+    },
+  },
   test: {
     silent: 'passed-only',
     unstubEnvs: true,

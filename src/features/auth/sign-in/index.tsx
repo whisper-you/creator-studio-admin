@@ -29,7 +29,10 @@ export function SignIn() {
               注册
             </Link>
             <br />
-            <span className='text-xs'>演示环境:任意邮箱 + 7 位以上密码即可登录</span>
+            <span className='text-xs'>
+              演示账号:creator@studio.dev / creator123(需运行 pnpm
+              server 启动后端;未启动时任意邮箱密码可进入离线演示模式)
+            </span>
           </CardDescription>
         </CardHeader>
         <CardContent>
