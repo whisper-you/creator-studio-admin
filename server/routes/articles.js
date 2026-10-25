@@ -192,9 +192,12 @@ articlesRouter.patch('/:id', (req, res) => {
 })
 
 articlesRouter.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM articles WHERE id = ?').run(req.params.id)
-  if (result.changes === 0) return res.status(404).json({ message: '文章不存在' })
-  res.json({ deleted: result.changes })
+  const run = withTransaction(() => {
+    db.prepare('DELETE FROM comments WHERE article_id = ?').run(req.params.id)
+    return db.prepare('DELETE FROM articles WHERE id = ?').run(req.params.id)
+  })()
+  if (run.changes === 0) return res.status(404).json({ message: '文章不存在' })
+  res.json({ deleted: run.changes })
 })
 
 // 阅读上报:阅读量 +1(前端「最近发布」点击等场景调用)
@@ -210,9 +213,13 @@ articlesRouter.post('/:id/view', (req, res) => {
 articlesRouter.post('/bulk-delete', (req, res) => {
   const parsed = z.object({ ids: z.array(z.string()).min(1) }).safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ message: '字段校验失败' })
-  const stmt = db.prepare('DELETE FROM articles WHERE id = ?')
+  const deleteComments = db.prepare('DELETE FROM comments WHERE article_id = ?')
+  const deleteArticle = db.prepare('DELETE FROM articles WHERE id = ?')
   const run = withTransaction((ids) => {
-    for (const id of ids) stmt.run(id)
+    for (const id of ids) {
+      deleteComments.run(id)
+      deleteArticle.run(id)
+    }
   })
   run(parsed.data.ids)
   res.json({ deleted: parsed.data.ids.length })

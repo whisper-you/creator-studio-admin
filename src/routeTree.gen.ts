@@ -26,6 +26,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedScheduleIndexRouteImport } from './routes/_authenticated/schedule/index'
 import { Route as AuthenticatedMaterialsIndexRouteImport } from './routes/_authenticated/materials/index'
 import { Route as AuthenticatedHelpCenterIndexRouteImport } from './routes/_authenticated/help-center/index'
+import { Route as AuthenticatedCommentsIndexRouteImport } from './routes/_authenticated/comments/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedArticlesIndexRouteImport } from './routes/_authenticated/articles/index'
 import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
@@ -123,6 +124,12 @@ const AuthenticatedHelpCenterIndexRoute =
     path: '/help-center/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCommentsIndexRoute =
+  AuthenticatedCommentsIndexRouteImport.update({
+    id: '/comments/',
+    path: '/comments/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedChannelsIndexRoute =
   AuthenticatedChannelsIndexRouteImport.update({
     id: '/channels/',
@@ -186,6 +193,7 @@ export interface FileRoutesByFullPath {
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/articles/': typeof AuthenticatedArticlesIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
+  '/comments/': typeof AuthenticatedCommentsIndexRoute
   '/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/materials/': typeof AuthenticatedMaterialsIndexRoute
   '/schedule/': typeof AuthenticatedScheduleIndexRoute
@@ -210,6 +218,7 @@ export interface FileRoutesByTo {
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/articles': typeof AuthenticatedArticlesIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
+  '/comments': typeof AuthenticatedCommentsIndexRoute
   '/help-center': typeof AuthenticatedHelpCenterIndexRoute
   '/materials': typeof AuthenticatedMaterialsIndexRoute
   '/schedule': typeof AuthenticatedScheduleIndexRoute
@@ -237,6 +246,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/_authenticated/articles/': typeof AuthenticatedArticlesIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
+  '/_authenticated/comments/': typeof AuthenticatedCommentsIndexRoute
   '/_authenticated/help-center/': typeof AuthenticatedHelpCenterIndexRoute
   '/_authenticated/materials/': typeof AuthenticatedMaterialsIndexRoute
   '/_authenticated/schedule/': typeof AuthenticatedScheduleIndexRoute
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/articles/'
     | '/channels/'
+    | '/comments/'
     | '/help-center/'
     | '/materials/'
     | '/schedule/'
@@ -288,6 +299,7 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/articles'
     | '/channels'
+    | '/comments'
     | '/help-center'
     | '/materials'
     | '/schedule'
@@ -314,6 +326,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/notifications'
     | '/_authenticated/articles/'
     | '/_authenticated/channels/'
+    | '/_authenticated/comments/'
     | '/_authenticated/help-center/'
     | '/_authenticated/materials/'
     | '/_authenticated/schedule/'
@@ -455,6 +468,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHelpCenterIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/comments/': {
+      id: '/_authenticated/comments/'
+      path: '/comments'
+      fullPath: '/comments/'
+      preLoaderRoute: typeof AuthenticatedCommentsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/channels/': {
       id: '/_authenticated/channels/'
       path: '/channels'
@@ -536,6 +556,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
   AuthenticatedArticlesIndexRoute: typeof AuthenticatedArticlesIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
+  AuthenticatedCommentsIndexRoute: typeof AuthenticatedCommentsIndexRoute
   AuthenticatedHelpCenterIndexRoute: typeof AuthenticatedHelpCenterIndexRoute
   AuthenticatedMaterialsIndexRoute: typeof AuthenticatedMaterialsIndexRoute
   AuthenticatedScheduleIndexRoute: typeof AuthenticatedScheduleIndexRoute
@@ -547,6 +568,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
   AuthenticatedArticlesIndexRoute: AuthenticatedArticlesIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
+  AuthenticatedCommentsIndexRoute: AuthenticatedCommentsIndexRoute,
   AuthenticatedHelpCenterIndexRoute: AuthenticatedHelpCenterIndexRoute,
   AuthenticatedMaterialsIndexRoute: AuthenticatedMaterialsIndexRoute,
   AuthenticatedScheduleIndexRoute: AuthenticatedScheduleIndexRoute,

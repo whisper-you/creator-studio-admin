@@ -113,7 +113,7 @@ describe('UserAuthForm', () => {
 
       await vi.waitFor(() => expect(mocks.setUser).toHaveBeenCalledOnce())
       expect(mocks.setUser).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'a@b.com', accountNo: 'ACC-1' })
+        expect.objectContaining({ email: 'a@b.com', id: 'ACC-1' })
       )
       expect(mocks.setAccessToken).toHaveBeenCalledWith('jwt-token')
       await vi.waitFor(() =>

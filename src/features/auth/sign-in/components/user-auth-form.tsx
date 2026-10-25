@@ -60,12 +60,7 @@ export function UserAuthForm({
         try {
           // 先请求真实后端(Express + JWT)
           const res = await authApi.login(data.email, data.password)
-          auth.setUser({
-            accountNo: res.user.id,
-            email: res.user.email,
-            role: ['user'],
-            exp: Date.now() + 24 * 60 * 60 * 1000,
-          })
+          auth.setUser(res.user)
           auth.setAccessToken(res.accessToken)
           setIsLoading(false)
           navigate({ to: targetPath, replace: true })
@@ -82,10 +77,9 @@ export function UserAuthForm({
           // 后端未启动:离线演示模式(保留 mock 鉴权)
           await sleep(1200)
           auth.setUser({
-            accountNo: 'ACC001',
+            id: 'ACC001',
             email: data.email,
-            role: ['user'],
-            exp: Date.now() + 24 * 60 * 60 * 1000,
+            name: '离线演示用户',
           })
           auth.setAccessToken('mock-access-token')
           navigate({ to: targetPath, replace: true })

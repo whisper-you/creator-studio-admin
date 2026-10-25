@@ -3,11 +3,11 @@ import { getCookie, setCookie, removeCookie } from '@/lib/cookies'
 
 const ACCESS_TOKEN = 'thisisjustarandomstring'
 
-interface AuthUser {
-  accountNo: string
+/** 登录用户(与后端 /api/auth/me 返回一致;离线演示模式下由前端构造) */
+export interface AuthUser {
+  id: string
   email: string
-  role: string[]
-  exp: number
+  name: string
 }
 
 interface AuthState {

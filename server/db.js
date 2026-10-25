@@ -54,6 +54,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS channels (
     name      TEXT PRIMARY KEY,
     account   TEXT,
+    desc      TEXT NOT NULL DEFAULT '',
     connected INTEGER NOT NULL DEFAULT 0
   );
   CREATE TABLE IF NOT EXISTS materials (
@@ -63,6 +64,14 @@ db.exec(`
     scene  TEXT NOT NULL,
     usage_count INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active'
+  );
+  CREATE TABLE IF NOT EXISTS comments (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id TEXT NOT NULL,
+    author     TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    status     TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL
   );
 `)
 
@@ -129,17 +138,17 @@ if (articleCount === 0) {
 const channelCount = db.prepare('SELECT COUNT(*) AS c FROM channels').get().c
 if (channelCount === 0) {
   const seedChannels = [
-    { name: '个人网站', account: 'blog.example.com', connected: 1 },
-    { name: '微信公众号', account: 'CreatorStudio', connected: 1 },
-    { name: '知乎', account: '@creator-studio', connected: 1 },
-    { name: '小红书', account: null, connected: 0 },
-    { name: '掘金', account: null, connected: 0 },
-    { name: 'B 站', account: null, connected: 0 },
-    { name: '即刻', account: null, connected: 0 },
-    { name: '邮件订阅', account: null, connected: 0 },
+    { name: '个人网站', account: 'blog.example.com', desc: '自建博客与作品集,内容资产的主阵地。', connected: 1 },
+    { name: '微信公众号', account: 'CreatorStudio', desc: '深度长文首发平台,支持粉丝留言互动。', connected: 1 },
+    { name: '知乎', account: '@creator-studio', desc: '技术问答与专栏,长尾搜索流量稳定。', connected: 1 },
+    { name: '小红书', account: null, desc: '图文笔记种草,适合教程与工具分享。', connected: 0 },
+    { name: '掘金', account: null, desc: '中文开发者社区,技术文章沉淀好去处。', connected: 0 },
+    { name: 'B 站', account: null, desc: '视频与图文动态,年轻用户聚集地。', connected: 0 },
+    { name: '即刻', account: null, desc: '独立开发者圈子,短内容快速分发。', connected: 0 },
+    { name: '邮件订阅', account: null, desc: '私有订阅列表,不依赖平台算法。', connected: 0 },
   ]
   const insertChannel = db.prepare(
-    'INSERT INTO channels (name, account, connected) VALUES (@name, @account, @connected)'
+    'INSERT INTO channels (name, account, desc, connected) VALUES (@name, @account, @desc, @connected)'
   )
   withTransaction((rows) => rows.forEach((row) => insertChannel.run(row)))(seedChannels)
 }
@@ -164,4 +173,52 @@ if (materialCount === 0) {
     'INSERT INTO materials (name, type, scene, usage_count, status) VALUES (?, ?, ?, ?, ?)'
   )
   withTransaction((rows) => rows.forEach((r) => insertMaterial.run(...r)))(seedMaterials)
+}
+
+// ========== 评论种子:挂在已发布文章上,状态混合供审核演示 ==========
+const commentCount = db.prepare('SELECT COUNT(*) AS c FROM comments').get().c
+if (commentCount === 0) {
+  const publishedIds = db
+    .prepare("SELECT id FROM articles WHERE status = 'published' ORDER BY id")
+    .all()
+    .map((r) => r.id)
+  const authors = [
+    '码农阿伟', '前端小林', '产品经理大周', '独立开发者 Ken', '写作爱好者小鹿',
+    '设计师 Mia', '数据分析师老王', '研究生小赵', '创业者阿彬', '教师莉莉',
+  ]
+  const contents = [
+    '写得太细了,照着做一遍直接跑通了,感谢!',
+    '请问下作者用的是哪个版本?我这边报错了。',
+    '收藏了,周末就用这个方案重构一下。',
+    '有一处没看懂:第二步为什么要先缓存再请求?',
+    '同感!我也踩过这个坑,当时排查了一整天。',
+    '建议补充一下性能对比的数据,会更有说服力。',
+    '这篇必须转发给团队,正好用得上。',
+    '排版和配图都很舒服,关注了!',
+    '观点不太同意,不过写得很清晰,支持交流。',
+    '求出个视频版,文字看着还是费劲。',
+  ]
+  const statuses = ['approved', 'approved', 'pending', 'approved', 'pending', 'rejected', 'approved', 'pending', 'approved', 'pending']
+  const insertComment = db.prepare(
+    'INSERT INTO comments (article_id, author, content, status, created_at) VALUES (?, ?, ?, ?, ?)'
+  )
+  withTransaction(() => {
+    publishedIds.slice(0, 10).forEach((articleId, i) => {
+      // 每篇挂 1-2 条
+      const count = i % 3 === 0 ? 2 : 1
+      for (let j = 0; j < count; j++) {
+        const idx = (i * 2 + j) % contents.length
+        const created = new Date()
+        created.setDate(created.getDate() - (i + j))
+        created.setHours(9 + ((i + j) % 12), 30, 0, 0)
+        insertComment.run(
+          articleId,
+          authors[idx % authors.length],
+          contents[idx],
+          statuses[idx],
+          created.toISOString()
+        )
+      }
+    })
+  })()
 }

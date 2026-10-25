@@ -286,3 +286,96 @@ describe('素材与统计接口', () => {
     }
   })
 })
+
+describe('注册与个人资料', () => {
+  it('POST /api/auth/register 注册并直接签发 token', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'new-user@test.dev',
+        password: 'password123',
+        name: '测试新人',
+      }),
+    })
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.user).toMatchObject({ email: 'new-user@test.dev', name: '测试新人' })
+    expect(body.accessToken).toBeTruthy()
+  })
+
+  it('重复邮箱注册返回 409', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'new-user@test.dev',
+        password: 'password123',
+      }),
+    })
+    expect(res.status).toBe(409)
+  })
+
+  it('PATCH /api/auth/me 更新昵称', async () => {
+    const token = (await (await login()).json()).accessToken
+    const res = await fetch(`${baseUrl}/api/auth/me`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ name: '改名后的创作者' }),
+    })
+    const body = await res.json()
+    expect(body.name).toBe('改名后的创作者')
+  })
+})
+
+describe('评论接口', () => {
+  let token
+
+  beforeAll(async () => {
+    token = (await (await login()).json()).accessToken
+  })
+
+  it('GET 返回种子评论并联表带出文章标题', async () => {
+    const res = await fetch(`${baseUrl}/api/comments`, {
+      headers: authed(token),
+    })
+    const body = await res.json()
+    expect(body.data.length).toBeGreaterThan(5)
+    expect(body.data.every((c) => c.articleTitle)).toBeTruthy()
+    expect(
+      body.data.some((c) => c.status === 'pending')
+    ).toBe(true)
+  })
+
+  it('GET ?status=pending 只返回待审', async () => {
+    const res = await fetch(`${baseUrl}/api/comments?status=pending`, {
+      headers: authed(token),
+    })
+    const body = await res.json()
+    expect(body.data.length).toBeGreaterThan(0)
+    expect(body.data.every((c) => c.status === 'pending')).toBe(true)
+    globalThis.__pendingId = body.data[0].id
+  })
+
+  it('PATCH 审核通过并落库', async () => {
+    const res = await fetch(`${baseUrl}/api/comments/${globalThis.__pendingId}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ status: 'approved' }),
+    })
+    expect((await res.json()).status).toBe('approved')
+  })
+
+  it('DELETE 删除评论', async () => {
+    const res = await fetch(`${baseUrl}/api/comments/${globalThis.__pendingId}`, {
+      method: 'DELETE',
+      headers: authed(token),
+    })
+    expect(res.status).toBe(200)
+    const again = await fetch(`${baseUrl}/api/comments/${globalThis.__pendingId}`, {
+      method: 'DELETE',
+      headers: authed(token),
+    })
+    expect(again.status).toBe(404)
+  })
+})

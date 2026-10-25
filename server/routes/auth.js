@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import jwt from 'jsonwebtoken'
-import { compareSync } from 'bcryptjs'
+import { compareSync, hashSync } from 'bcryptjs'
 import { z } from 'zod'
 import { db } from '../db.js'
 
@@ -35,6 +35,34 @@ export function requireAuth(req, res, next) {
 
 export const authRouter = Router()
 
+const registerSchema = loginSchema.extend({
+  name: z.string().min(1).max(30).default('新创作者'),
+})
+
+authRouter.post('/register', (req, res) => {
+  const parsed = registerSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: '请输入合法的邮箱与密码' })
+  }
+  const { email, password, name } = parsed.data
+  const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+  if (exists) {
+    return res.status(409).json({ message: '该邮箱已被注册' })
+  }
+  const result = db
+    .prepare(
+      'INSERT INTO users (email, name, password_hash, created_at) VALUES (?, ?, ?, ?)'
+    )
+    .run(email, name, hashSync(password, 10), new Date().toISOString())
+  const user = db
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .get(result.lastInsertRowid)
+  res.status(201).json({
+    accessToken: signToken(user),
+    user: { id: String(user.id), email: user.email, name: user.name },
+  })
+})
+
 authRouter.post('/login', (req, res) => {
   const parsed = loginSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -55,5 +83,19 @@ authRouter.post('/login', (req, res) => {
 authRouter.get('/me', requireAuth, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId)
   if (!user) return res.status(401).json({ message: '用户不存在' })
+  res.json({ id: String(user.id), email: user.email, name: user.name })
+})
+
+// 更新个人资料(昵称)
+authRouter.patch('/me', requireAuth, (req, res) => {
+  const parsed = z
+    .object({ name: z.string().min(1).max(30) })
+    .safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ message: '昵称不能为空' })
+  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(
+    parsed.data.name,
+    req.userId
+  )
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId)
   res.json({ id: String(user.id), email: user.email, name: user.name })
 })

@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { z } from 'zod'
+import { isAxiosError } from 'axios'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useNavigate } from '@tanstack/react-router'
 import { Loader2, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
-import { IconFacebook, IconGithub } from '@/assets/brand-icons'
-import { sleep, cn } from '@/lib/utils'
+import { IconGithub } from '@/assets/brand-icons'
+import { useAuthStore } from '@/stores/auth-store'
+import { authApi } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -20,18 +24,18 @@ import { PasswordInput } from '@/components/password-input'
 
 const formSchema = z
   .object({
+    name: z.string().min(1, '请输入昵称。').max(30, '昵称最多 30 个字符。'),
     email: z.email({
-      error: (iss) =>
-        iss.input === '' ? 'Please enter your email.' : undefined,
+      error: (iss) => (iss.input === '' ? '请输入邮箱地址。' : undefined),
     }),
     password: z
       .string()
-      .min(1, 'Please enter your password.')
-      .min(7, 'Password must be at least 7 characters long.'),
-    confirmPassword: z.string().min(1, 'Please confirm your password.'),
+      .min(1, '请输入密码。')
+      .min(7, '密码至少需要 7 个字符。'),
+    confirmPassword: z.string().min(1, '请再次输入密码。'),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match.",
+    message: '两次输入的密码不一致。',
     path: ['confirmPassword'],
   })
 
@@ -40,10 +44,12 @@ export function SignUpForm({
   ...props
 }: React.HTMLAttributes<HTMLFormElement>) {
   const [isLoading, setIsLoading] = useState(false)
+  const navigate = useNavigate()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -53,14 +59,39 @@ export function SignUpForm({
   function onSubmit(data: z.infer<typeof formSchema>) {
     setIsLoading(true)
 
-    toast.promise(sleep(2000), {
-      loading: 'Creating account...',
-      success: () => {
-        setIsLoading(false)
-        return `Account created for ${data.email}.`
-      },
-      error: 'Error',
-    })
+    toast.promise(
+      (async () => {
+        try {
+          const res = await authApi.register(
+            data.email,
+            data.password,
+            data.name
+          )
+          const { auth } = useAuthStore.getState()
+          auth.setUser(res.user)
+          auth.setAccessToken(res.accessToken)
+          setIsLoading(false)
+          navigate({ to: '/', replace: true })
+          return `注册成功,欢迎加入,${res.user.name}!`
+        } catch (err) {
+          setIsLoading(false)
+          if (isAxiosError(err) && err.response) {
+            const message =
+              (err.response.data as { message?: string })?.message ?? '注册失败'
+            throw new Error(message, { cause: err })
+          }
+          // 后端未启动:离线演示模式只提示,不创建本地账号
+          throw new Error('后端未启动,无法注册;请先运行 pnpm server', {
+            cause: err,
+          })
+        }
+      })(),
+      {
+        loading: '正在创建账号...',
+        success: (msg) => msg,
+        error: (err: Error) => err.message,
+      }
+    )
   }
 
   return (
@@ -72,10 +103,23 @@ export function SignUpForm({
       >
         <FormField
           control={form.control}
+          name='name'
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>昵称</FormLabel>
+              <FormControl>
+                <Input placeholder='创作者昵称' {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
           name='email'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>邮箱</FormLabel>
               <FormControl>
                 <Input placeholder='name@example.com' {...field} />
               </FormControl>
@@ -88,7 +132,7 @@ export function SignUpForm({
           name='password'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Password</FormLabel>
+              <FormLabel>密码</FormLabel>
               <FormControl>
                 <PasswordInput placeholder='********' {...field} />
               </FormControl>
@@ -101,7 +145,7 @@ export function SignUpForm({
           name='confirmPassword'
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Confirm Password</FormLabel>
+              <FormLabel>确认密码</FormLabel>
               <FormControl>
                 <PasswordInput placeholder='********' {...field} />
               </FormControl>
@@ -111,7 +155,7 @@ export function SignUpForm({
         />
         <Button className='mt-2' disabled={isLoading}>
           {isLoading ? <Loader2 className='animate-spin' /> : <UserPlus />}
-          Create Account
+          创建账号
         </Button>
 
         <div className='relative my-2'>
@@ -120,12 +164,12 @@ export function SignUpForm({
           </div>
           <div className='relative flex justify-center text-xs uppercase'>
             <span className='bg-background px-2 text-muted-foreground'>
-              Or continue with
+              或使用第三方登录
             </span>
           </div>
         </div>
 
-        <div className='grid grid-cols-2 gap-2'>
+        <div className='grid grid-cols-1 gap-2'>
           <Button
             variant='outline'
             className='w-full'
@@ -133,14 +177,6 @@ export function SignUpForm({
             disabled={isLoading}
           >
             <IconGithub className='h-4 w-4' /> GitHub
-          </Button>
-          <Button
-            variant='outline'
-            className='w-full'
-            type='button'
-            disabled={isLoading}
-          >
-            <IconFacebook className='h-4 w-4' /> Facebook
           </Button>
         </div>
       </form>

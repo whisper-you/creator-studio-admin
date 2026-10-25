@@ -15,17 +15,16 @@ export function SignUp() {
     <AuthLayout>
       <Card className='max-w-sm gap-4'>
         <CardHeader>
-          <CardTitle className='text-lg tracking-tight'>
-            Create an account
-          </CardTitle>
+          <CardTitle className='text-lg tracking-tight'>创建账号</CardTitle>
           <CardDescription>
-            Enter your email and password to create an account. <br />
-            Already have an account?{' '}
+            输入昵称、邮箱和密码创建账号(需后端启动)。
+            <br />
+            已有账号?
             <Link
               to='/sign-in'
               className='underline underline-offset-4 hover:text-primary'
             >
-              Sign In
+              去登录
             </Link>
           </CardDescription>
         </CardHeader>
@@ -34,21 +33,21 @@ export function SignUp() {
         </CardContent>
         <CardFooter>
           <p className='px-8 text-center text-sm text-muted-foreground'>
-            By creating an account, you agree to our{' '}
+            创建账号即代表你同意我们的{' '}
             <a
               href='/terms'
               className='underline underline-offset-4 hover:text-primary'
             >
-              Terms of Service
+              服务条款
             </a>{' '}
-            and{' '}
+            与{' '}
             <a
               href='/privacy'
               className='underline underline-offset-4 hover:text-primary'
             >
-              Privacy Policy
+              隐私政策
             </a>
-            .
+            。
           </p>
         </CardFooter>
       </Card>

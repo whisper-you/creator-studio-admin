@@ -17,6 +17,7 @@ import {
   UserX,
   CalendarDays,
   FolderOpen,
+  MessagesSquare,
   ShieldCheck,
 } from 'lucide-react'
 import { Logo } from '@/assets/logo'
@@ -58,6 +59,11 @@ export const sidebarData: SidebarData = {
           title: '发布渠道',
           url: '/channels',
           icon: Share2,
+        },
+        {
+          title: '评论管理',
+          url: '/comments',
+          icon: MessagesSquare,
         },
         {
           title: '素材库',

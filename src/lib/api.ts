@@ -39,6 +39,18 @@ export const authApi = {
       (await api.post('/auth/login', { email, password })).data
     )
   },
+  async register(email: string, password: string, name: string) {
+    return loginSchema.parse(
+      (await api.post('/auth/register', { email, password, name })).data
+    )
+  },
+  /** 用当前 token 换取用户信息(刷新页面后恢复登录态) */
+  async me() {
+    return meSchema.parse((await api.get('/auth/me')).data)
+  },
+  async updateMe(name: string) {
+    return meSchema.parse((await api.patch('/auth/me', { name })).data)
+  },
 }
 
 export const articlesApi = {
@@ -113,6 +125,28 @@ const trendSchema = z.object({
   ),
 })
 
+const meSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+})
+
+const commentListSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.string(),
+      articleId: z.string(),
+      articleTitle: z.string().nullable(),
+      author: z.string(),
+      content: z.string(),
+      status: z.enum(['pending', 'approved', 'rejected']),
+      createdAt: z.string(),
+    })
+  ),
+})
+
+export type CommentItem = z.infer<typeof commentListSchema>['data'][number]
+
 export const channelsApi = {
   async list() {
     return channelListSchema.parse((await api.get('/channels')).data).data
@@ -135,5 +169,19 @@ export const statsApi = {
     return trendSchema.parse(
       (await api.get('/stats/trend', { params: { days } })).data
     ).data
+  },
+}
+
+export const commentsApi = {
+  async list(status?: 'pending' | 'approved' | 'rejected') {
+    return commentListSchema.parse(
+      (await api.get('/comments', { params: status ? { status } : {} })).data
+    ).data
+  },
+  async setStatus(id: string, status: 'approved' | 'rejected') {
+    await api.patch(`/comments/${id}`, { status })
+  },
+  async remove(id: string) {
+    await api.delete(`/comments/${id}`)
   },
 }
