@@ -52,6 +52,7 @@ import {
   type Article,
 } from '../data/schema'
 import { useArticlesStore } from '../store'
+import { MarkdownEditor } from './markdown-editor'
 
 type ArticleMutateDrawerProps = {
   open: boolean
@@ -329,10 +330,10 @@ export function ArticlesMutateDrawer({
                 <FormItem>
                   <FormLabel>正文</FormLabel>
                   <FormControl>
-                    <Textarea
-                      {...field}
-                      rows={6}
-                      placeholder='正文内容(后续接入 Markdown 编辑器)'
+                    <MarkdownEditor
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      rows={8}
                     />
                   </FormControl>
                   <FormMessage />
