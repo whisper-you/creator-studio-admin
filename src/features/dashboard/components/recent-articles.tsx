@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { ArrowUpRight, Eye } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -15,7 +16,7 @@ import { fmtCount } from '../data/stats'
 
 /** 最近发布的文章(数据与文章管理实时共享) */
 export function RecentArticles() {
-  const { articles } = useArticlesStore()
+  const { articles, recordView } = useArticlesStore()
 
   const recent = useMemo(
     () =>
@@ -29,6 +30,11 @@ export function RecentArticles() {
     [articles]
   )
 
+  const handleRecordView = (id: string, title: string) => {
+    recordView(id)
+    toast.success(`已记录一次访问:「${title}」`)
+  }
+
   return (
     <Card className='h-full'>
       <CardHeader>
@@ -40,7 +46,17 @@ export function RecentArticles() {
       </CardHeader>
       <CardContent className='space-y-4'>
         {recent.map((a) => (
-          <div key={a.id} className='flex items-start justify-between gap-3'>
+          <div
+            key={a.id}
+            role='button'
+            tabIndex={0}
+            title='点击记录一次访问,阅读量 +1'
+            onClick={() => handleRecordView(a.id, a.title)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRecordView(a.id, a.title)
+            }}
+            className='flex cursor-pointer items-start justify-between gap-3 rounded-md p-1 transition-colors hover:bg-muted/60'
+          >
             <div className='min-w-0'>
               <p className='truncate text-sm font-medium'>{a.title}</p>
               <div className='mt-1 flex items-center gap-2 text-xs text-muted-foreground'>
@@ -60,6 +76,9 @@ export function RecentArticles() {
             </Badge>
           </div>
         ))}
+        <p className='text-xs text-muted-foreground'>
+          点击任意一篇可模拟一次访问,阅读量实时上报到后端
+        </p>
       </CardContent>
     </Card>
   )

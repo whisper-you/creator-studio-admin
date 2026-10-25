@@ -1,7 +1,8 @@
-import { type ChangeEvent, useState } from 'react'
+import { type ChangeEvent, useEffect, useState } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
 import { SlidersHorizontal, ArrowUpAZ, ArrowDownAZ } from 'lucide-react'
 import { toast } from 'sonner'
+import { channelsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -18,7 +19,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-import { channels as initialChannels } from './data/channels'
+import { channels as seedChannels } from './data/channels'
 
 const route = getRouteApi('/_authenticated/channels/')
 
@@ -41,12 +42,39 @@ export function Channels() {
   const [sort, setSort] = useState(initSort)
   const [channelType, setChannelType] = useState(type)
   const [searchTerm, setSearchTerm] = useState(filter)
-  // 绑定状态:演示为前端内存态,接后端后改为请求
+  // 渠道列表:挂载时从后端拉取并持久化;后端不可用时降级为种子数据
+  const [channels, setChannels] = useState(seedChannels)
   const [connectedSet, setConnectedSet] = useState<Set<string>>(
-    () => new Set(initialChannels.filter((c) => c.connected).map((c) => c.name))
+    () => new Set(seedChannels.filter((c) => c.connected).map((c) => c.name))
   )
 
-  const filteredChannels = initialChannels
+  useEffect(() => {
+    channelsApi
+      .list()
+      .then((rows) => {
+        // 图标/颜色等展示元数据在前端,按名称与后端状态合并
+        setChannels((prev) =>
+          prev.map((c) => {
+            const row = rows.find((r) => r.name === c.name)
+            return row
+              ? {
+                  ...c,
+                  connected: row.connected,
+                  account: row.account ?? c.account,
+                }
+              : c
+          })
+        )
+        setConnectedSet(
+          new Set(rows.filter((r) => r.connected).map((r) => r.name))
+        )
+      })
+      .catch(() => {
+        // 后端未启动:保持种子演示数据
+      })
+  }, [])
+
+  const filteredChannels = channels
     .slice()
     .sort((a, b) =>
       sort === 'asc'
@@ -88,16 +116,27 @@ export function Channels() {
   }
 
   const handleToggleConnect = (name: string) => {
+    const nextConnected = !connectedSet.has(name)
+    // 乐观更新:先改本地,PATCH 失败再回滚
     setConnectedSet((prev) => {
       const next = new Set(prev)
-      if (next.has(name)) {
-        next.delete(name)
-        toast.success(`已解绑「${name}」`)
-      } else {
-        next.add(name)
-        toast.success(`「${name}」绑定成功,可通过文章管理一键分发`)
-      }
+      if (nextConnected) next.add(name)
+      else next.delete(name)
       return next
+    })
+    toast.success(
+      nextConnected
+        ? `「${name}」绑定成功,可通过文章管理一键分发`
+        : `已解绑「${name}」`
+    )
+    channelsApi.setConnected(name, nextConnected).catch(() => {
+      setConnectedSet((prev) => {
+        const next = new Set(prev)
+        if (nextConnected) next.delete(name)
+        else next.add(name)
+        return next
+      })
+      toast.error('绑定状态同步失败,已回滚(请确认后端是否启动)')
     })
   }
 

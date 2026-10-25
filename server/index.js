@@ -5,6 +5,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import cors from 'cors'
 import { authRouter } from './routes/auth.js'
 import { articlesRouter } from './routes/articles.js'
+import { channelsRouter } from './routes/channels.js'
+import { materialsRouter } from './routes/materials.js'
+import { statsRouter } from './routes/stats.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.API_PORT) || 5180
@@ -16,6 +19,9 @@ app.use(express.json())
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 app.use('/api/auth', authRouter)
 app.use('/api/articles', articlesRouter)
+app.use('/api/channels', channelsRouter)
+app.use('/api/materials', materialsRouter)
+app.use('/api/stats', statsRouter)
 
 // 生产模式:同端口托管前端构建产物(单服务部署)
 const distDir = join(__dirname, '..', 'dist')

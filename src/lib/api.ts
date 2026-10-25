@@ -75,4 +75,65 @@ export const articlesApi = {
     if (ids.length === 1) await api.delete(`/articles/${ids[0]}`)
     else await api.post('/articles/bulk-delete', { ids })
   },
+  /** 阅读上报:后端 views +1,返回最新阅读量 */
+  async recordView(id: string): Promise<number> {
+    const { data } = await api.post<{ id: string; views: number }>(
+      `/articles/${id}/view`
+    )
+    return data.views
+  },
+}
+
+const channelListSchema = z.object({
+  data: z.array(
+    z.object({
+      name: z.string(),
+      account: z.string().nullable().optional(),
+      connected: z.boolean(),
+    })
+  ),
+})
+
+const materialListSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.number(),
+      name: z.string(),
+      type: z.enum(['标题公式', '封面模板', '话题灵感', '数据报告']),
+      scene: z.string(),
+      usage: z.number(),
+      status: z.enum(['active', 'updating', 'deprecated']),
+    })
+  ),
+})
+
+const trendSchema = z.object({
+  data: z.array(
+    z.object({ date: z.string(), 阅读: z.number(), 点赞: z.number() })
+  ),
+})
+
+export const channelsApi = {
+  async list() {
+    return channelListSchema.parse((await api.get('/channels')).data).data
+  },
+  /** 绑定/解绑(渠道名含中文,需 URL 编码) */
+  async setConnected(name: string, connected: boolean) {
+    await api.patch(`/channels/${encodeURIComponent(name)}`, { connected })
+  },
+}
+
+export const materialsApi = {
+  async list() {
+    return materialListSchema.parse((await api.get('/materials')).data).data
+  },
+}
+
+export const statsApi = {
+  /** 近 N 天阅读/点赞趋势(后端按日聚合) */
+  async trend(days = 30) {
+    return trendSchema.parse(
+      (await api.get('/stats/trend', { params: { days } })).data
+    ).data
+  },
 }

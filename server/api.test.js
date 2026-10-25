@@ -177,4 +177,112 @@ describe('文章 CRUD 全流程', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  it('POST /:id/view 阅读上报 +1', async () => {
+    await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        id: 'ART-901',
+        title: '阅读上报测试',
+        excerpt: 'x',
+        content: 'y',
+        status: 'published',
+        category: 'tech',
+        views: 10,
+      }),
+    })
+    const res = await fetch(`${baseUrl}/api/articles/ART-901/view`, {
+      method: 'POST',
+      headers: authed(token),
+    })
+    const body = await res.json()
+    expect(body.views).toBe(11)
+    await fetch(`${baseUrl}/api/articles/bulk-delete`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({ ids: ['ART-901'] }),
+    })
+  })
+})
+
+describe('渠道接口', () => {
+  let token
+
+  beforeAll(async () => {
+    token = (await (await login()).json()).accessToken
+  })
+
+  it('GET 返回种子渠道(含绑定状态)', async () => {
+    const res = await fetch(`${baseUrl}/api/channels`, {
+      headers: authed(token),
+    })
+    const body = await res.json()
+    expect(body.data.length).toBe(8)
+    const wechat = body.data.find((c) => c.name === '微信公众号')
+    expect(wechat.connected).toBe(true)
+    expect(wechat.account).toBeTruthy()
+  })
+
+  it('PATCH 绑定/解绑持久化', async () => {
+    const name = encodeURIComponent('小红书')
+    const res = await fetch(`${baseUrl}/api/channels/${name}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ connected: true }),
+    })
+    expect((await res.json()).connected).toBe(true)
+
+    // 再读一次,确认落库
+    const list = await (await fetch(`${baseUrl}/api/channels`, { headers: authed(token) })).json()
+    expect(list.data.find((c) => c.name === '小红书').connected).toBe(true)
+
+    // 还原,避免影响其他用例
+    await fetch(`${baseUrl}/api/channels/${name}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ connected: false }),
+    })
+  })
+
+  it('PATCH 不存在的渠道返回 404', async () => {
+    const res = await fetch(
+      `${baseUrl}/api/channels/${encodeURIComponent('不存在')}`,
+      {
+        method: 'PATCH',
+        headers: authed(token),
+        body: JSON.stringify({ connected: true }),
+      }
+    )
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('素材与统计接口', () => {
+  let token
+
+  beforeAll(async () => {
+    token = (await (await login()).json()).accessToken
+  })
+
+  it('GET /api/materials 返回种子素材', async () => {
+    const res = await fetch(`${baseUrl}/api/materials`, {
+      headers: authed(token),
+    })
+    const body = await res.json()
+    expect(body.data.length).toBe(12)
+    expect(body.data[0]).toMatchObject({ type: '标题公式', status: 'active' })
+  })
+
+  it('GET /api/stats/trend 返回确定性时序', async () => {
+    const res = await fetch(`${baseUrl}/api/stats/trend?days=30`, {
+      headers: authed(token),
+    })
+    const body = await res.json()
+    expect(body.data).toHaveLength(30)
+    expect(body.data.at(-1).date).toMatch(/^\d{2}-\d{2}$/)
+    for (const point of body.data) {
+      expect(point.阅读).toBeGreaterThan(point.点赞)
+    }
+  })
 })

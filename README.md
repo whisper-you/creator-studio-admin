@@ -38,9 +38,12 @@
 ### 真后端(Express + SQLite + JWT)
 
 - `server/`:Express 5 + Node 内置 `node:sqlite`(零原生编译)+ jsonwebtoken + bcryptjs
-- 登录签发 JWT(24h),文章接口全部走鉴权中间件;401 由前端统一处理
-- 文章 CRUD + 服务端分页/筛选/搜索接口(`page/pageSize/status/category/filter`),PATCH 支持部分更新与 `null` 清空日期语义
-- 前端策略:「服务端优先 + 离线降级」—— 启动时从 API 全量 hydrate,写操作乐观更新、失败自动回滚并提示;后端未启动时退回本地演示模式,页面照常可用
+- 登录签发 JWT(24h),所有接口走鉴权中间件;401 由前端统一处理
+- **文章**:CRUD + 服务端分页/筛选/搜索(`page/pageSize/status/category/filter`),PATCH 支持部分更新与 `null` 清空日期语义,`POST /:id/view` 阅读上报
+- **渠道**:绑定/解绑持久化(不再刷新还原);**素材库**:后端数据驱动
+- **统计**:`GET /api/stats/trend` 后端按日聚合趋势曲线(以日期为随机种子,跨重启确定性一致)
+- 前端策略:「服务端优先 + 离线降级」—— 启动时从 API hydrate,写操作乐观更新、失败自动回滚;后端未启动时各页面退回本地演示模式
+- 全站无前端假数据:页面展示的每一项数据都来自 SQLite 或后端接口
 
 ### 测试与部署
 
@@ -92,7 +95,7 @@ docker compose up   # 单容器部署(API + 前端,端口 3000)
 
 ## Roadmap
 
-- [x] 真后端:Express + SQLite + JWT,文章 CRUD、分页筛选(2026-10-26)
+- [x] 真后端:Express + SQLite + JWT,文章/渠道/素材/统计全部接口化,无前端假数据(2026-10-26)
 - [x] 测试 + CI + Docker:单测 115 个用例、API 集成测试、GitHub Actions、镜像构建(2026-10-26)
 - [ ] 线上 demo 部署(推送 GitHub 后接 CI/托管平台)
 - [ ] 评论审核模块

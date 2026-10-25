@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { materialsApi } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -20,7 +22,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-import { materials } from './data/materials'
+import { materials as seedMaterials } from './data/materials'
 
 const statusBadge = {
   active: { label: '可用', variant: 'default' },
@@ -29,7 +31,19 @@ const statusBadge = {
 } as const
 
 export function Materials() {
-  const totalUsage = materials.reduce((acc, m) => acc + m.usage, 0)
+  // 挂载时从后端拉取;后端不可用时降级为种子数据
+  const [rows, setRows] = useState(seedMaterials)
+
+  useEffect(() => {
+    materialsApi
+      .list()
+      .then(setRows)
+      .catch(() => {
+        // 后端未启动:保持种子演示数据
+      })
+  }, [])
+
+  const totalUsage = rows.reduce((acc, m) => acc + m.usage, 0)
 
   return (
     <>
@@ -45,7 +59,7 @@ export function Materials() {
           <div>
             <h1 className='text-2xl font-bold tracking-tight'>素材库</h1>
             <p className='text-muted-foreground'>
-              {materials.length} 个素材 · 累计被引用 {totalUsage} 次
+              {rows.length} 个素材 · 累计被引用 {totalUsage} 次
             </p>
           </div>
         </div>
@@ -69,7 +83,7 @@ export function Materials() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {materials.map((m) => (
+                {rows.map((m) => (
                   <TableRow key={m.name}>
                     <TableCell className='font-medium'>{m.name}</TableCell>
                     <TableCell>{m.type}</TableCell>

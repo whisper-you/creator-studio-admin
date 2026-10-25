@@ -197,6 +197,16 @@ articlesRouter.delete('/:id', (req, res) => {
   res.json({ deleted: result.changes })
 })
 
+// 阅读上报:阅读量 +1(前端「最近发布」点击等场景调用)
+articlesRouter.post('/:id/view', (req, res) => {
+  const result = db
+    .prepare('UPDATE articles SET views = views + 1 WHERE id = ?')
+    .run(req.params.id)
+  if (result.changes === 0) return res.status(404).json({ message: '文章不存在' })
+  const row = db.prepare('SELECT id, views FROM articles WHERE id = ?').get(req.params.id)
+  res.json(row)
+})
+
 articlesRouter.post('/bulk-delete', (req, res) => {
   const parsed = z.object({ ids: z.array(z.string()).min(1) }).safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ message: '字段校验失败' })

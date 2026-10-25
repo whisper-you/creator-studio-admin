@@ -37,6 +37,8 @@ type ArticlesState = {
   scheduleArticle: (id: Article['id'], date: Date) => void
   /** 取消排期:退回草稿 */
   unscheduleArticle: (id: Article['id']) => void
+  /** 阅读上报:本地 views +1,服务端专用接口落库 */
+  recordView: (id: Article['id']) => void
   resetArticles: () => void
 }
 
@@ -217,6 +219,15 @@ export const useArticlesStore = create<ArticlesState>()(
                 scheduledAt: null,
                 updatedAt: new Date().toISOString(),
               })
+          ),
+
+        recordView: (id) =>
+          optimistic(
+            () =>
+              get().articles.map((a) =>
+                a.id === id ? { ...a, views: a.views + 1 } : a
+              ),
+            () => articlesApi.recordView(id).then(() => undefined)
           ),
 
         resetArticles: () => set({ articles: seedArticles }),

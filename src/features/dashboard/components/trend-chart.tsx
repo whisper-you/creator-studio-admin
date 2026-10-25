@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   Area,
   AreaChart,
@@ -8,13 +9,23 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { statsApi } from '@/lib/api'
 import { useArticlesStore } from '@/features/articles/store'
 import { buildTrendSeries, fmtCount } from '../data/stats'
 
-/** 近 30 天阅读 / 点赞趋势 */
+/** 近 30 天阅读 / 点赞趋势:优先用后端聚合接口,后端不可用时降级为本地推导 */
 export function TrendChart() {
   const { articles } = useArticlesStore()
-  const data = useMemo(() => buildTrendSeries(articles), [articles])
+
+  const { data: serverData } = useQuery({
+    queryKey: ['stats', 'trend'],
+    queryFn: () => statsApi.trend(30),
+    staleTime: 60_000,
+    retry: 1,
+  })
+
+  const fallback = useMemo(() => buildTrendSeries(articles), [articles])
+  const data = serverData ?? fallback
 
   return (
     <ResponsiveContainer width='100%' height={320}>
