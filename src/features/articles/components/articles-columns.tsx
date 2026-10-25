@@ -1,7 +1,6 @@
 import { format } from 'date-fns'
 import { type ColumnDef } from '@tanstack/react-table'
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DataTableColumnHeader } from '@/components/data-table'
 import {
@@ -56,23 +55,23 @@ export const articlesColumns: ColumnDef<Article>[] = [
       <DataTableColumnHeader column={column} title='标题' />
     ),
     meta: {
-      className: 'ps-1 max-w-0 w-2/5',
+      className: 'ps-1 w-1/3 min-w-56',
       tdClassName: 'ps-4',
     },
     cell: ({ row }) => {
-      const category = categoryMeta(row.original.category)
       return (
-        <div className='flex flex-col gap-1 py-1'>
-          <div className='flex items-center space-x-2'>
-            {category && <Badge variant='outline'>{category.label}</Badge>}
-            <span className='truncate font-medium'>
-              {row.getValue('title')}
-            </span>
-          </div>
+        <div className='flex min-w-0 flex-col gap-1.5 py-1'>
+          {/* 标题独立一行,保证在任何缩放/列宽下都完整可见 */}
+          <span className='max-w-full truncate font-medium'>
+            {row.getValue('title')}
+          </span>
           {row.original.tags.length > 0 && (
-            <div className='hidden gap-1 text-xs text-muted-foreground sm:flex'>
+            <div className='flex flex-wrap items-center gap-1.5'>
               {row.original.tags.map((tag) => (
-                <span key={tag} className='rounded bg-muted px-1.5 py-0.5'>
+                <span
+                  key={tag}
+                  className='rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground'
+                >
                   # {tag}
                 </span>
               ))}
