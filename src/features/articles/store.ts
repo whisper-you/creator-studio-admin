@@ -50,10 +50,13 @@ export const useArticlesStore = create<ArticlesState>()(
         const prev = get().articles
         set({ articles: mutate() })
         if (get().mode !== 'server') return
-        sync().catch(() => {
-          set({ articles: prev })
-          toast.error('数据同步失败,已回滚(请确认后端 pnpm server 是否启动)')
-        })
+        // Promise.resolve 包一层:sync 同步抛错(或返回 undefined)也能被捕获回滚
+        Promise.resolve()
+          .then(sync)
+          .catch(() => {
+            set({ articles: prev })
+            toast.error('数据同步失败,已回滚(请确认后端 pnpm server 是否启动)')
+          })
       }
 
       return {

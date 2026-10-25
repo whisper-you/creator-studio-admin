@@ -36,19 +36,28 @@
 - 文章 CRUD + 服务端分页/筛选/搜索接口(`page/pageSize/status/category/filter`),PATCH 支持部分更新与 `null` 清空日期语义
 - 前端策略:「服务端优先 + 离线降级」—— 启动时从 API 全量 hydrate,写操作乐观更新、失败自动回滚并提示;后端未启动时退回本地演示模式,页面照常可用
 
+### 测试与部署
+- **单元测试**(Vitest + 浏览器模式):状态机规则、store 乐观更新与回滚、漏斗/趋势统计、最佳时段规则
+- **API 集成测试**(node 环境):真实 Express + 临时 SQLite,覆盖鉴权、CRUD、PATCH 部分更新语义、批量操作、错误分支
+- **CI**(GitHub Actions):lint → 类型检查 → 构建 → 后端测试 → 前端测试
+- **Docker**:多阶段构建,单容器同时托管 API 与前端静态资源,SQLite 落 volume
+
 ## 技术栈
 
-Vite · React 19 · TypeScript · TanStack Router(类型安全路由 + URL Search 校验)· TanStack Table · Zustand · zod · react-hook-form · Recharts · Tailwind CSS v4 · shadcn/ui · Express 5 · node:sqlite · JWT
+Vite · React 19 · TypeScript · TanStack Router(类型安全路由 + URL Search 校验)· TanStack Table · Zustand · zod · react-hook-form · Recharts · Tailwind CSS v4 · shadcn/ui · Express 5 · node:sqlite · JWT · Vitest · Playwright · Docker
 
 ## 快速开始
 
 ```bash
 pnpm install
-pnpm dev:all    # 同时启动前端(5173)与后端 API(5180)
-pnpm dev        # 仅前端(后端未启动时为离线演示模式)
-pnpm server     # 仅后端 API
-pnpm build      # 类型检查 + 生产构建
-pnpm lint       # ESLint
+pnpm dev:all        # 同时启动前端(5173)与后端 API(5180)
+pnpm dev            # 仅前端(后端未启动时为离线演示模式)
+pnpm server         # 仅后端 API
+pnpm build          # 类型检查 + 生产构建
+pnpm lint           # ESLint
+pnpm test           # 前端单元测试(浏览器模式)
+pnpm test:server    # 后端 API 集成测试
+docker compose up   # 单容器部署(API + 前端,端口 3000)
 ```
 
 演示账号:`creator@studio.dev` / `creator123`(后端首次启动时自动创建)。
@@ -77,8 +86,9 @@ pnpm lint       # ESLint
 ## Roadmap
 
 - [x] 真后端:Express + SQLite + JWT,文章 CRUD、分页筛选(2026-10-26)
+- [x] 测试 + CI + Docker:单测 115 个用例、API 集成测试、GitHub Actions、镜像构建(2026-10-26)
+- [ ] 线上 demo 部署(推送 GitHub 后接 CI/托管平台)
 - [ ] 评论审核模块
-- [ ] Vitest 单测 + Playwright E2E + CI + Docker 部署
 - [ ] Markdown 编辑器接入正文
 
 ## License

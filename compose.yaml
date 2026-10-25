@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+    volumes:
+      - sqlite-data:/app/server/data
+    restart: unless-stopped
+
+volumes:
+  sqlite-data:

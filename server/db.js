@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { hashSync } from 'bcryptjs'
 import { buildSeedArticles } from './seed.js'
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const dataDir = join(__dirname, 'data')
+// DATA_DIR 可覆盖存储位置(测试用临时目录)
+const dataDir = process.env.DATA_DIR ?? join(__dirname, 'data')
 if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true })
 
 export const db = new DatabaseSync(join(dataDir, 'sqlite.db'))

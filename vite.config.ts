@@ -30,6 +30,8 @@ export default defineConfig({
   test: {
     silent: 'passed-only',
     unstubEnvs: true,
+    // server/ 的测试走 node 环境(vitest.node.config.ts),不进浏览器
+    exclude: ['server/**', 'node_modules/**', 'dist/**'],
     browser: {
       enabled: true,
       provider: playwright(),

@@ -4,29 +4,46 @@ import { type Locator, userEvent } from 'vitest/browser'
 import { UserAuthForm } from './user-auth-form'
 
 const FORM_MESSAGES = {
-  emailEmpty: 'Please enter your email.',
-  passwordEmpty: 'Please enter your password.',
-  passwordShort: 'Password must be at least 7 characters long.',
+  emailEmpty: '请输入邮箱地址。',
+  passwordEmpty: '请输入密码。',
 } as const
 
-const navigate = vi.fn()
-const setUserMock = vi.fn()
-const setAccessTokenMock = vi.fn()
+const mocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  setUser: vi.fn(),
+  setAccessToken: vi.fn(),
+  login: vi.fn(),
+}))
+
+vi.mock('@/lib/api', () => ({
+  authApi: { login: mocks.login },
+}))
 
 vi.mock('@/stores/auth-store', () => ({
-  useAuthStore: () => ({
-    auth: {
-      setUser: setUserMock,
-      setAccessToken: setAccessTokenMock,
-    },
-  }),
+  useAuthStore: Object.assign(
+    () => ({
+      auth: {
+        setUser: mocks.setUser,
+        setAccessToken: mocks.setAccessToken,
+      },
+    }),
+    {
+      // 组件内部通过 useAuthStore.getState() 取方法
+      getState: () => ({
+        auth: {
+          setUser: mocks.setUser,
+          setAccessToken: mocks.setAccessToken,
+        },
+      }),
+    }
+  ),
 }))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
   return {
     ...actual,
-    useNavigate: () => navigate,
+    useNavigate: () => mocks.navigate,
     Link: ({
       children,
       to,
@@ -60,10 +77,10 @@ describe('UserAuthForm', () => {
     beforeEach(async () => {
       vi.clearAllMocks()
       screen = await render(<UserAuthForm />)
-      emailInput = screen.getByRole('textbox', { name: /^Email$/i })
-      passwordInput = screen.getByLabelText(/^Password$/i)
-      signInButton = screen.getByRole('button', { name: /^Sign in$/i })
-      forgotPasswordLink = screen.getByText(/^Forgot password\?$/i)
+      emailInput = screen.getByRole('textbox', { name: /^邮箱$/ })
+      passwordInput = screen.getByLabelText(/^密码$/)
+      signInButton = screen.getByRole('button', { name: /^登录$/ })
+      forgotPasswordLink = screen.getByText(/^忘记密码\?$/)
     })
 
     it('renders fields, submit button, and forgot password link', async () => {
@@ -84,47 +101,78 @@ describe('UserAuthForm', () => {
         .toBeInTheDocument()
     })
 
-    it('authenticates and navigates to default route on success', async () => {
-      await userEvent.fill(emailInput, 'a@b.com')
-      await userEvent.fill(passwordInput, '1234567')
+    it('calls the auth API, stores token, and navigates on success', async () => {
+      mocks.login.mockResolvedValue({
+        accessToken: 'jwt-token',
+        user: { id: 'ACC-1', email: 'a@b.com', name: '创作者' },
+      })
 
+      await userEvent.fill(emailInput, 'a@b.com')
+      await userEvent.fill(passwordInput, 'creator123')
       await userEvent.click(signInButton)
 
-      await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
-      expect(setUserMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          email: 'a@b.com',
-          accountNo: expect.any(String),
-          role: expect.any(Array),
-          exp: expect.any(Number),
+      await vi.waitFor(() => expect(mocks.setUser).toHaveBeenCalledOnce())
+      expect(mocks.setUser).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'a@b.com', accountNo: 'ACC-1' })
+      )
+      expect(mocks.setAccessToken).toHaveBeenCalledWith('jwt-token')
+      await vi.waitFor(() =>
+        expect(mocks.navigate).toHaveBeenCalledWith({
+          to: '/',
+          replace: true,
         })
       )
-      expect(setAccessTokenMock).toHaveBeenCalledOnce()
-      expect(setAccessTokenMock).toHaveBeenCalledWith('mock-access-token')
+    })
 
-      await vi.waitFor(() =>
-        expect(navigate).toHaveBeenCalledWith({ to: '/', replace: true })
+    it('surfaces the error and does not navigate on wrong credentials', async () => {
+      const axiosLikeError = Object.assign(
+        new Error('邮箱或密码错误'),
+        { isAxiosError: true, response: { status: 401, data: { message: '邮箱或密码错误' } } }
       )
+      mocks.login.mockRejectedValue(axiosLikeError)
+
+      await userEvent.fill(emailInput, 'a@b.com')
+      await userEvent.fill(passwordInput, 'wrong-password')
+      await userEvent.click(signInButton)
+
+      await vi.waitFor(() => expect(mocks.login).toHaveBeenCalledOnce())
+      expect(mocks.setUser).not.toHaveBeenCalled()
+      expect(mocks.navigate).not.toHaveBeenCalled()
+    })
+
+    it('falls back to offline demo auth when the backend is unreachable', async () => {
+      // 无 response 属性的报错 = 网络不通 → 走离线演示模式
+      mocks.login.mockRejectedValue(new Error('Network Error'))
+
+      await userEvent.fill(emailInput, 'demo@b.com')
+      await userEvent.fill(passwordInput, 'creator123')
+      await userEvent.click(signInButton)
+
+      await vi.waitFor(() => expect(mocks.setUser).toHaveBeenCalledOnce())
+      expect(mocks.setAccessToken).toHaveBeenCalledWith('mock-access-token')
+      expect(mocks.navigate).toHaveBeenCalledWith({ to: '/', replace: true })
     })
   })
 
   it('navigates to redirectTo when provided', async () => {
     vi.clearAllMocks()
+    mocks.login.mockResolvedValue({
+      accessToken: 'jwt-token',
+      user: { id: 'ACC-1', email: 'a@b.com', name: '创作者' },
+    })
 
     const { getByRole, getByLabelText } = await render(
       <UserAuthForm redirectTo='/settings' />
     )
 
-    await userEvent.fill(getByRole('textbox', { name: /Email/i }), 'a@b.com')
-    await userEvent.fill(getByLabelText('Password'), '1234567')
+    await userEvent.fill(getByRole('textbox', { name: /邮箱/ }), 'a@b.com')
+    await userEvent.fill(getByLabelText('密码'), 'creator123')
+    await userEvent.click(getByRole('button', { name: /登录/ }))
 
-    await userEvent.click(getByRole('button', { name: /Sign in/i }))
-
-    await vi.waitFor(() => expect(setUserMock).toHaveBeenCalledOnce())
-    expect(setAccessTokenMock).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(mocks.setUser).toHaveBeenCalledOnce())
 
     await vi.waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({
+      expect(mocks.navigate).toHaveBeenCalledWith({
         to: '/settings',
         replace: true,
       })

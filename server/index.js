@@ -1,7 +1,7 @@
 import express from 'express'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import cors from 'cors'
 import { authRouter } from './routes/auth.js'
 import { articlesRouter } from './routes/articles.js'
@@ -29,7 +29,13 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ message: '服务器内部错误' })
 })
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`[api] Creator Studio API 已启动:http://localhost:${PORT}`)
-})
+// 导出 app 供测试使用;直接运行时才监听端口
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+if (isMain) {
+  app.listen(PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`[api] Creator Studio API 已启动:http://localhost:${PORT}`)
+  })
+}
+
+export { app }
