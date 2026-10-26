@@ -40,6 +40,7 @@ const PAGE_SIZE = 20
 
 const actionLabels: Record<string, string> = {
   'auth.change_password': '修改密码',
+  'auth.refresh_reuse': '会话重放拦截',
   'user.role_change': '角色变更',
   'article.status_change': '文章状态变更',
   'article.bulk_status_change': '批量状态变更',

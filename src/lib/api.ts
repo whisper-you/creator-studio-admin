@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import axios from 'axios'
+import axios, { type InternalAxiosRequestConfig } from 'axios'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { articleSchema, type Article } from '@/features/articles/data/schema'
@@ -10,7 +10,7 @@ import { articleSchema, type Article } from '@/features/articles/data/schema'
  * - 生产环境同源部署(Express 托管 dist)时天然同源
  * - 自动携带 JWT;未启动后端时由调用方降级为「离线演示模式」
  */
-const api = axios.create({ baseURL: '/api' })
+const api = axios.create({ baseURL: '/api', withCredentials: true })
 
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().auth.accessToken
@@ -18,34 +18,80 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// 这些接口的 401 属于预期业务结果,不能触发静默续期
+const AUTH_PATHS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/logout',
+]
+
+/** 会话彻底失效:清理本地状态并回到登录页(重复调用只生效一次) */
+function handleSessionExpired() {
+  const { auth } = useAuthStore.getState()
+  if (!auth.accessToken && !auth.user) return
+  auth.reset()
+  toast.error('登录状态已失效,请重新登录')
+  if (
+    typeof window !== 'undefined' &&
+    !window.location.pathname.startsWith('/sign-in') &&
+    !window.location.pathname.startsWith('/sign-up')
+  ) {
+    const redirect = encodeURIComponent(
+      window.location.pathname + window.location.search
+    )
+    window.location.href = `/sign-in?redirect=${redirect}`
+  }
+}
+
+// 并发请求同时 401 时只发起一次刷新
+let refreshPromise: Promise<LoginResult> | null = null
+
+function refreshSession(): Promise<LoginResult> {
+  refreshPromise ??= axios
+    .post('/api/auth/refresh', {}, { withCredentials: true })
+    .then((res) => {
+      const session = loginSchema.parse(res.data)
+      const { auth } = useAuthStore.getState()
+      auth.setAccessToken(session.accessToken)
+      auth.setUser(session.user)
+      return session
+    })
+    .finally(() => {
+      refreshPromise = null
+    })
+  return refreshPromise
+}
+
+type RetryableConfig = InternalAxiosRequestConfig & { _retried?: boolean }
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      // 登录和注册接口本身返回 401(账号密码错误)由表单捕获提示,不触发全站重置
-      const isAuthRequest =
-        error.config?.url?.includes('/auth/login') ||
-        error.config?.url?.includes('/auth/register')
-
-      if (!isAuthRequest) {
-        const currentToken = useAuthStore.getState().auth.accessToken
-        if (currentToken) {
-          useAuthStore.getState().auth.reset()
-          toast.error('登录状态已失效,请重新登录')
-          if (
-            typeof window !== 'undefined' &&
-            !window.location.pathname.startsWith('/sign-in') &&
-            !window.location.pathname.startsWith('/sign-up')
-          ) {
-            const redirect = encodeURIComponent(
-              window.location.pathname + window.location.search
-            )
-            window.location.href = `/sign-in?redirect=${redirect}`
-          }
-        }
-      }
+  async (error) => {
+    if (!axios.isAxiosError(error) || error.response?.status !== 401) {
+      return Promise.reject(error)
     }
-    return Promise.reject(error)
+    const config = error.config as RetryableConfig | undefined
+    const url = config?.url ?? ''
+    if (!config || AUTH_PATHS.some((path) => url.includes(path))) {
+      return Promise.reject(error)
+    }
+
+    // 续期后仍然 401:说明会话已被服务端吊销
+    if (config._retried) {
+      handleSessionExpired()
+      return Promise.reject(error)
+    }
+    config._retried = true
+
+    try {
+      const session = await refreshSession()
+      config.headers.Authorization = `Bearer ${session.accessToken}`
+      return api.request(config)
+    } catch {
+      handleSessionExpired()
+      return Promise.reject(error)
+    }
   }
 )
 
@@ -99,6 +145,10 @@ export const authApi = {
         })
       ).data
     )
+  },
+  /** 吊销服务端 refresh token 并清除 Cookie */
+  async logout() {
+    await api.post('/auth/logout')
   },
 }
 
