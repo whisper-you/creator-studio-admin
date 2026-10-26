@@ -46,6 +46,7 @@ creator-studio-admin/
 │   │   ├── auth.js               # 登录/注册/刷新/登出/改密吊销/RBAC 角色流转
 │   │   ├── articles.js           # 文章全功能 CRUD/分页/筛选/批量操作/乐观锁
 │   │   ├── audit.js              # 审计日志查询（仅管理员）
+│   │   ├── users.js              # 用户列表、管理员重置密码与强制下线（仅管理员）
 │   │   ├── channels.js           # 渠道绑定与 Webhook 连通性测试探针
 │   │   ├── materials.js          # 本地图床素材上传（格式/大小/魔数校验）与列表管理
 │   │   ├── distribution.js       # 渠道分发日志查询与手动触发
@@ -69,6 +70,7 @@ creator-studio-admin/
 │   │   │   │   └── download-csv.ts     # CSV 报表导出器
 │   │   │   └── store.ts          # 文章持久化、乐观更新与 409 冲突刷新
 │   │   ├── audit-logs/           # 管理员操作审计日志查询页
+│   │   ├── users/                # 管理员用户与会话管理（重置密码 / 强制下线）
 │   │   ├── schedule/             # 内容排期日历模块
 │   │   ├── channels/             # 渠道绑定与 Webhook 配置模块
 │   │   ├── materials/            # 本地自托管素材库模块

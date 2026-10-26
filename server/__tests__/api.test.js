@@ -1599,3 +1599,163 @@ describe('操作审计日志', () => {
     expect(logs.data.every((log) => log.actorEmail === auditEmail)).toBe(true)
   })
 })
+
+describe('管理员用户管理:重置密码与强制下线', () => {
+  const targetEmail = 'users-target@test.dev'
+  let adminToken
+  let adminId
+  let target
+  let authorToken
+
+  const registerUser = async (email, name) => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: 'password123', name }),
+    })
+    const body = await res.json()
+    return {
+      id: body.user.id,
+      token: body.accessToken,
+      cookie: refreshCookieOf(res),
+    }
+  }
+
+  const listUsers = (query = '') =>
+    fetch(`${baseUrl}/api/users?pageSize=100&${query}`, {
+      headers: authed(adminToken),
+    })
+
+  const resetPassword = (id, body, token = adminToken) =>
+    fetch(`${baseUrl}/api/users/${id}/reset-password`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify(body),
+    })
+
+  const forceLogout = (id, token = adminToken) =>
+    fetch(`${baseUrl}/api/users/${id}/force-logout`, {
+      method: 'POST',
+      headers: authed(token),
+    })
+
+  const getMe = (token) =>
+    fetch(`${baseUrl}/api/auth/me`, { headers: authed(token) })
+
+  const listAudit = async (action) =>
+    (
+      await (
+        await fetch(`${baseUrl}/api/audit-logs?pageSize=100&action=${action}`, {
+          headers: authed(adminToken),
+        })
+      ).json()
+    ).data
+
+  beforeAll(async () => {
+    const res = await login()
+    const body = await res.json()
+    adminToken = body.accessToken
+    adminId = body.user.id
+    target = await registerUser(targetEmail, '被管理用户')
+    const author = await registerUser('users-author@test.dev', '普通作者')
+    authorToken = author.token
+  })
+
+  it('非管理员访问用户列表、重置密码与强制下线均返回 403', async () => {
+    expect(
+      (await fetch(`${baseUrl}/api/users`, { headers: authed(authorToken) }))
+        .status
+    ).toBe(403)
+    expect(
+      (
+        await resetPassword(
+          target.id,
+          { newPassword: 'new-pass-1x' },
+          authorToken
+        )
+      ).status
+    ).toBe(403)
+    expect((await forceLogout(target.id, authorToken)).status).toBe(403)
+  })
+
+  it('管理员可分页搜索用户,不返回密码哈希', async () => {
+    const res = await listUsers('q=users-target')
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.total).toBe(1)
+    const row = body.data[0]
+    expect(row).toMatchObject({
+      id: target.id,
+      email: targetEmail,
+      role: 'author',
+    })
+    expect(row).not.toHaveProperty('password_hash')
+    expect(row.activeSessions).toBe(1)
+
+    const all = await (await listUsers()).json()
+    expect(all.data.some((u) => u.id === adminId)).toBe(true)
+  })
+
+  it('重置密码:参数校验、目标不存在与自我保护', async () => {
+    const short = await resetPassword(target.id, { newPassword: 'short1' })
+    expect(short.status).toBe(400)
+    expect((await short.json()).message).toContain('8 个字符')
+
+    expect(
+      (await resetPassword('999999', { newPassword: 'valid-pass-1' })).status
+    ).toBe(404)
+
+    const self = await resetPassword(adminId, { newPassword: 'valid-pass-1' })
+    expect(self.status).toBe(400)
+    expect((await getMe(adminToken)).status).toBe(200)
+  })
+
+  it('重置密码立即吊销全部会话,旧密码失效、新密码可登录', async () => {
+    const res = await resetPassword(target.id, {
+      newPassword: 'target-new-pass1',
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.revokedSessions).toBeGreaterThanOrEqual(1)
+
+    // 旧 access token 因 token_version 递增立即失效
+    expect((await getMe(target.token)).status).toBe(401)
+    // 旧 refresh cookie 已被吊销,无法续期
+    expect((await refreshWith(target.cookie)).status).toBe(401)
+    // 旧密码无法登录,新密码可以
+    expect((await login(targetEmail, 'password123')).status).toBe(401)
+    expect((await login(targetEmail, 'target-new-pass1')).status).toBe(200)
+
+    const logs = await listAudit('user.reset_password')
+    const log = logs.find((row) => row.entityId === target.id)
+    expect(log).toBeTruthy()
+    expect(log.actorEmail).toBe('creator@studio.dev')
+    expect(log.detail.revokedSessions).toBeGreaterThanOrEqual(1)
+  })
+
+  it('强制下线立即失效访问令牌,并可重新登录', async () => {
+    const fresh = await login(targetEmail, 'target-new-pass1')
+    const session = await fresh.json()
+    const cookie = refreshCookieOf(fresh)
+
+    const res = await forceLogout(target.id)
+    expect(res.status).toBe(200)
+    expect((await res.json()).revokedSessions).toBeGreaterThanOrEqual(1)
+
+    expect((await getMe(session.accessToken)).status).toBe(401)
+    expect((await refreshWith(cookie)).status).toBe(401)
+    // 密码未变,重新登录立即恢复
+    expect((await login(targetEmail, 'target-new-pass1')).status).toBe(200)
+
+    const logs = await listAudit('user.force_logout')
+    const log = logs.find((row) => row.entityId === target.id)
+    expect(log).toBeTruthy()
+    expect(log.detail.revokedSessions).toBeGreaterThanOrEqual(1)
+  })
+
+  it('强制下线:目标不存在与自我保护', async () => {
+    expect((await forceLogout('999999')).status).toBe(404)
+    expect((await forceLogout(adminId)).status).toBe(400)
+    expect((await getMe(adminToken)).status).toBe(200)
+  })
+})

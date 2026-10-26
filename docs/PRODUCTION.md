@@ -133,7 +133,8 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - 每次调用 `POST /api/auth/refresh` 都会轮换 refresh token；已轮换的旧 token 被再次使用视为泄露重放，会吊销该用户全部会话并写入 `auth.refresh_reuse` 审计。
 - `POST /api/auth/logout` 吊销当前 refresh token 并清除 Cookie；改密会吊销该用户全部 refresh token（同时递增 `token_version` 让存量 access token 失效），并为当前会话补发新 token。
 - 前端在请求返回 401 时自动单飞刷新并重放原请求；刷新失败才清理登录态并跳转登录页。页面刷新后若 access token 已过期，也会静默续期，无需用户重新登录。
-- 服务端尚未提供忘记密码重置、管理员强制下线与登录设备列表；`/api/auth/me` 仅支持修改昵称与角色。
+- 管理员用户管理：`GET /api/users` 分页/搜索账号并返回活跃会话数；`POST /api/users/:id/reset-password` 设置新密码；`POST /api/users/:id/force-logout` 强制下线。两者都会递增 `token_version`、吊销目标用户全部 refresh token，并分别写入 `user.reset_password` / `user.force_logout` 审计。为避免管理员误伤自己，这两个接口禁止对自己执行（改自己密码请走个人设置，结束自己的会话请走登出）。
+- 服务端尚未提供忘记密码邮件重置与登录设备列表；`/api/auth/me` 仅支持修改昵称与角色。
 - 公开注册固定创建 `author` 用户。
 - 认证端点已限流：登录 30 次/15 分钟、注册 5 次/小时、改密 10 次/15 分钟、刷新 120 次/15 分钟，按客户端 IP 计数；单进程内存实现，重启清零。阈值可通过 `AUTH_RATE_LIMIT_*` / `REGISTER_RATE_LIMIT_*` / `CHANGE_PASSWORD_RATE_LIMIT_MAX` / `REFRESH_RATE_LIMIT_MAX` 调整。
 - CORS 默认仅同源：开发/测试放行本地 Vite（`localhost:5173`），生产不启用跨域；前后端分域部署时通过 `CORS_ORIGINS`（逗号分隔）显式放行。
@@ -149,7 +150,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 3. **演示数据默认只在非生产环境注入**。生产环境空库首次启动必须设置 `ADMIN_EMAIL` / `ADMIN_PASSWORD`（密码至少 8 位），否则服务会拒绝启动；不会创建演示文章、素材、评论或默认口令账号。渠道会写入基础定义，但默认全部为未连接状态。若显式设置 `SEED_DEMO_DATA=true`，会连同 `creator@studio.dev / creator123` 演示账号一起写入，仅限演示部署。
 4. access token 仍存在 JS 可读 Cookie 中，XSS 可在其 15 分钟有效期内窃取；生产环境应通过严格 CSP、依赖审计与输入转义降低风险。refresh token 已改为 HttpOnly，无法被脚本读取，且轮换 + 重放检测可限制泄露窗口。
 5. **生产环境必须启用 HTTPS**。refresh Cookie 在 `NODE_ENV=production` 下带 `Secure`，纯 HTTP 部署会导致浏览器不保存 Cookie，表现为登录后立刻掉线。
-6. 改密会吊销全部 refresh token 并递增 `token_version`，适合密码泄露或人员变动时紧急处置。目前没有管理员强制下线接口；如需要，可基于 `refresh_tokens` 表扩展「按用户撤销全部会话」。
+6. 改密、管理员重置密码与强制下线都会吊销全部 refresh token 并递增 `token_version`，适合密码泄露或人员变动时紧急处置。管理员接口无法对自己执行，避免误操作导致当前管理会话立即失效。
 7. 前后端分域部署时，除设置 `CORS_ORIGINS` 外，还需保证浏览器允许携带凭据（服务端已开启 `credentials`，前端 axios 已设置 `withCredentials`），且 `Secure` Cookie 要求 HTTPS。
 8. 如果站点对公网开放，建议在最外层再增加 WAF 或 Nginx `limit_req` 作为纵深防御。内置限流是单进程内存计数，多副本部署时每个实例各自计数，需改用 Redis 等共享存储。
 
@@ -263,7 +264,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 1. **数据库**：SQLite → PostgreSQL，引入版本化迁移与连接池。
 2. **文件**：本地 `uploads/` → 对象存储 + CDN。
 3. **调度与分发**：进程内定时器 → 独立 Worker + 队列（BullMQ / Redis / 云队列），支持重试、幂等与死信。
-4. **认证**：补充忘记密码重置、管理员强制下线与设备列表；多副本时将 refresh token 会话与限流计数迁移到共享存储（Redis/PostgreSQL）。
+4. **认证**：补充忘记密码邮件重置与登录设备列表；多副本时将 refresh token 会话与限流计数迁移到共享存储（Redis/PostgreSQL）。
 5. **可观测性**：在现有请求日志基础上补充指标、错误追踪与告警，并将日志集中收集。
 6. **部署**：单容器 → 无状态多副本 + 托管数据库 + 对象存储，调度器单独部署。
 
