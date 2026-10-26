@@ -59,6 +59,13 @@ const authorStatusAllowed = (user, status, currentStatus) =>
   status === currentStatus ||
   AUTHOR_STATUSES.includes(status)
 
+/** 阅读/点赞属于上报数据:作者不能直接写入非零值,避免自行美化指标 */
+const authorInflatesMetrics = (user, data) =>
+  isAuthor(user) && ((data.views ?? 0) > 0 || (data.likes ?? 0) > 0)
+
+const authorTouchesMetrics = (user, data) =>
+  isAuthor(user) && (data.views !== undefined || data.likes !== undefined)
+
 /** 状态机冲突:与角色越权(403)区分开,便于前端提示具体流转方向 */
 const transitionConflict = (res, details) =>
   res.status(409).json({
@@ -218,6 +225,9 @@ articlesRouter.post('/', (req, res) => {
   if (!authorStatusAllowed(req.user, a.status)) {
     return forbidden(res, '作者仅可创建草稿或提交审核的文章')
   }
+  if (authorInflatesMetrics(req.user, a)) {
+    return forbidden(res, '作者不能设置阅读/点赞数据')
+  }
   const now = new Date().toISOString()
   try {
     db.prepare(
@@ -275,6 +285,9 @@ articlesRouter.post('/bulk', (req, res) => {
   ) {
     return forbidden(res, '作者仅可创建草稿或提交审核的文章')
   }
+  if (parsed.data.articles.some((a) => authorInflatesMetrics(req.user, a))) {
+    return forbidden(res, '作者不能设置阅读/点赞数据')
+  }
   const now = new Date().toISOString()
   const insert = db.prepare(`
     INSERT INTO articles
@@ -328,6 +341,9 @@ articlesRouter.patch('/bulk', (req, res) => {
       .json({ message: '字段校验失败', issues: parsed.error.issues })
   }
   const { ids, patch, versions } = parsed.data
+  if (authorTouchesMetrics(req.user, patch)) {
+    return forbidden(res, '作者不能修改阅读/点赞数据')
+  }
   const rows = ids.map((id) =>
     db.prepare('SELECT * FROM articles WHERE id = ?').get(id)
   )
@@ -414,6 +430,9 @@ articlesRouter.patch('/:id', (req, res) => {
     .get(req.params.id)
   if (!current) return res.status(404).json({ message: '文章不存在' })
   if (!canEditArticle(req.user, current)) return forbidden(res)
+  if (authorTouchesMetrics(req.user, parsed.data)) {
+    return forbidden(res, '作者不能修改阅读/点赞数据')
+  }
   if (!authorStatusAllowed(req.user, parsed.data.status, current.status)) {
     return forbidden(res, '作者仅可将文章保存为草稿或提交审核')
   }

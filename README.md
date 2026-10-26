@@ -9,7 +9,7 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express)
 ![SQLite](https://img.shields.io/badge/SQLite-node:sqlite-003B57?style=flat-square&logo=sqlite)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
-![Tests](https://img.shields.io/badge/Tests-158%20Passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-159%20Passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 <p align="center">
@@ -106,7 +106,7 @@
   | 👑 **超级管理员 (Admin)** | 全量管理权限（创建、直接发布、排期发布、删除、分发、系统设置与图床运维） |
   | ✍️ **主编/审批员 (Editor)** | 内容终审权限（可发布、排期、审核通过、执行各渠道分发；不可删除他人文章） |
   | 📝 **创作者 (Author)** | 创作与提交权限（仅可保存草稿 `draft` 或**提交审核 `in_review`**；无权越权发布、排期或物理删除） |
-- **服务端强制校验**：所有写操作接口都会校验角色与文章归属（`author_id`），前端菜单隐藏只是体验层，越权请求会返回 403。
+- **服务端强制校验**：所有写操作接口都会校验角色与文章归属（`author_id`），前端菜单隐藏只是体验层，越权请求会返回 403。阅读/点赞属于上报数据，作者不能直接设置非零值或通过 PATCH 改写，管理员/主编可修正。
 - **服务端状态机**：文章状态只能沿 `draft → in_review → scheduled → published → archived → draft` 流转（排期可从任意状态进入 `scheduled`），非法流转返回 409；批量更新中任意一条非法则整批拒绝，不会部分落库。
 - **文章乐观锁**：更新携带读取时的 `version`，版本不一致返回 409 与最新版本号；前端自动刷新为服务端数据，避免多人协作时静默覆盖。批量更新同样支持版本映射，任一过期则整批回滚。
 - **输入规模上限**：文章标题 200 字符、摘要 600 字符、正文 20 万字符、标签 20 个（每个 30 字符）、文章 ID 64 字符；批量创建/更新/删除单次最多 100 条，超出时前端自动分片提交，避免超大数组长时间占用服务端事件循环。
@@ -377,7 +377,7 @@ server {
 项目实施严苛的代码质量与自动化测试工程规范：
 
 ```bash
-# 执行后端 API 集成测试 (98 个用例覆盖登录鉴权、会话续期与登出、登录设备管理、改密吊销、管理员角色调整/停用启用/重置密码/强制下线、文章 CRUD/乐观锁、图床上传安全、Webhook 地址校验与字段可见性、RBAC、状态机、审计与自动分发)
+# 执行后端 API 集成测试 (99 个用例覆盖登录鉴权、会话续期与登出、登录设备管理、改密吊销、管理员角色调整/停用启用/重置密码/强制下线、文章 CRUD/乐观锁、图床上传安全、Webhook 地址校验与字段可见性、RBAC、状态机、审计与自动分发)
 pnpm test:server
 
 # 执行全量代码静态规范检查 (ESLint 9)
@@ -389,7 +389,7 @@ pnpm build
 
 当前测试运行结果：
 
-- `server/__tests__/api.test.js`：98 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、登录设备列表与撤销、管理员角色调整/停用启用/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、Webhook 地址校验与字段可见性、文章输入规模上限、access token 算法约束、畸形路径与 Cookie 编码容错、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
+- `server/__tests__/api.test.js`：99 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、登录设备列表与撤销、管理员角色调整/停用启用/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、Webhook 地址校验与字段可见性、文章输入规模上限、access token 算法约束、畸形路径与 Cookie 编码容错、作者指标篡改拦截、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
 - `server/__tests__/access-token.test.js`：3 个 HS256 算法固定、非 HS256 签名与 alg=none 拒绝测试全部通过。
 - `server/__tests__/webhook-url.test.js`：4 个 Webhook 协议、凭据、云元数据/链路本地与私网拦截测试全部通过。
 - `server/__tests__/jwt-secret.test.js`：8 个 JWT 密钥解析与生产启动校验测试全部通过。
@@ -400,7 +400,7 @@ pnpm build
 - `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
 - `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
 - `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
-- **全套 158 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
+- **全套 159 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
 
 ---
 

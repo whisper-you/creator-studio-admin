@@ -1623,6 +1623,83 @@ describe('服务端 RBAC: 角色、文章归属与越权拦截', () => {
     expect(other.status).toBe(403)
   })
 
+  it('author 不能伪造阅读/点赞数据,管理员仍可修正', async () => {
+    const draft = {
+      id: 'ART-RBAC-METRICS',
+      title: '指标测试',
+      excerpt: '',
+      content: '',
+      status: 'draft',
+      category: 'tech',
+    }
+    const inflateCreate = await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(authorToken),
+      body: JSON.stringify({ ...draft, views: 1000, likes: 50 }),
+    })
+    expect(inflateCreate.status).toBe(403)
+
+    const inflateBulk = await fetch(`${baseUrl}/api/articles/bulk`, {
+      method: 'POST',
+      headers: authed(authorToken),
+      body: JSON.stringify({ articles: [{ ...draft, views: 5 }] }),
+    })
+    expect(inflateBulk.status).toBe(403)
+
+    // 作者正常创建(指标为 0)不受影响
+    const created = await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(authorToken),
+      body: JSON.stringify({ ...draft, views: 0, likes: 0 }),
+    })
+    expect(created.status).toBe(201)
+
+    const patchViews = await fetch(`${baseUrl}/api/articles/ART-RBAC-METRICS`, {
+      method: 'PATCH',
+      headers: authed(authorToken),
+      body: JSON.stringify({ views: 999 }),
+    })
+    expect(patchViews.status).toBe(403)
+    const patchLikes = await fetch(`${baseUrl}/api/articles/ART-RBAC-METRICS`, {
+      method: 'PATCH',
+      headers: authed(authorToken),
+      body: JSON.stringify({ likes: 99 }),
+    })
+    expect(patchLikes.status).toBe(403)
+    const bulkPatch = await fetch(`${baseUrl}/api/articles/bulk`, {
+      method: 'PATCH',
+      headers: authed(authorToken),
+      body: JSON.stringify({
+        ids: ['ART-RBAC-METRICS'],
+        patch: { views: 999 },
+      }),
+    })
+    expect(bulkPatch.status).toBe(403)
+
+    // 阅读上报接口仍会真实计数
+    const view = await fetch(`${baseUrl}/api/articles/ART-RBAC-METRICS/view`, {
+      method: 'POST',
+      headers: authed(authorToken),
+    })
+    expect(view.status).toBe(200)
+    expect((await view.json()).views).toBe(1)
+
+    // 管理员可修正指标
+    const adminPatch = await fetch(`${baseUrl}/api/articles/ART-RBAC-METRICS`, {
+      method: 'PATCH',
+      headers: authed(adminToken),
+      body: JSON.stringify({ views: 42 }),
+    })
+    expect(adminPatch.status).toBe(200)
+    expect((await adminPatch.json()).views).toBe(42)
+
+    const cleanup = await fetch(`${baseUrl}/api/articles/ART-RBAC-METRICS`, {
+      method: 'DELETE',
+      headers: authed(adminToken),
+    })
+    expect(cleanup.status).toBe(200)
+  })
+
   it('author 不能删除文章,也不能触发分发', async () => {
     const del = await fetch(`${baseUrl}/api/articles/ART-RBAC-AUTHOR`, {
       method: 'DELETE',
