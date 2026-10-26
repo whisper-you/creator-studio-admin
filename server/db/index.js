@@ -101,6 +101,10 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_audit_logs_created
     ON audit_logs (created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_action
+    ON audit_logs (action, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_entity
+    ON audit_logs (entity_type, id DESC);
   CREATE TABLE IF NOT EXISTS refresh_tokens (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL,
@@ -115,6 +119,24 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
     ON refresh_tokens (user_id);
+  CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires
+    ON refresh_tokens (expires_at);
+  CREATE INDEX IF NOT EXISTS idx_articles_created
+    ON articles (created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_articles_status_created
+    ON articles (status, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_articles_scheduled
+    ON articles (status, scheduled_at);
+  CREATE INDEX IF NOT EXISTS idx_comments_article
+    ON comments (article_id);
+  CREATE INDEX IF NOT EXISTS idx_comments_created
+    ON comments (created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_comments_status_created
+    ON comments (status, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_distribution_logs_article
+    ON distribution_logs (article_id, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_distribution_logs_created
+    ON distribution_logs (created_at);
 `)
 
 // 平滑数据库迁移:为旧库补充新列

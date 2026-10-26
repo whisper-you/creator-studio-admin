@@ -9,7 +9,7 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express)
 ![SQLite](https://img.shields.io/badge/SQLite-node:sqlite-003B57?style=flat-square&logo=sqlite)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
-![Tests](https://img.shields.io/badge/Tests-159%20Passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-164%20Passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 <p align="center">
@@ -232,6 +232,10 @@ ADMIN_PASSWORD=
 # REGISTER_RATE_LIMIT_MAX=5
 # REFRESH_RATE_LIMIT_MAX=120
 
+# 日志留存天数 (0 表示永久保留;审计默认 180 天,分发默认 90 天,每 24 小时清理一次)
+# AUDIT_LOG_RETENTION_DAYS=180
+# DISTRIBUTION_LOG_RETENTION_DAYS=90
+
 # 会话有效期 (access token 默认 15 分钟;refresh token 默认 30 天)
 # ACCESS_TOKEN_TTL=15m
 # REFRESH_TOKEN_TTL_DAYS=30
@@ -396,11 +400,12 @@ pnpm build
 - `server/__tests__/seed-policy.test.js`：12 个种子数据策略、管理员引导与生产初始化测试全部通过。
 - `server/__tests__/security.test.js`：12 个安全响应头、CORS 白名单、认证限流与请求体解析错误（400/413）测试全部通过。
 - `server/__tests__/observability.test.js`：5 个健康检查、请求 ID 透传与 API 404 兜底测试全部通过。
+- `server/__tests__/retention.test.js`：5 个日志留存默认值、环境变量覆盖、非法值回退、超期清理与永久保留测试全部通过。
 - `src/features/articles/utils/parse-markdown.test.ts`：5 个 Frontmatter 解析与容错测试全部通过。
 - `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
 - `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
 - `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
-- **全套 159 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
+- **全套 164 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
 
 ---
 

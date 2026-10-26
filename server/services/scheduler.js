@@ -1,7 +1,25 @@
 import { db, withTransaction, articleRowToJson } from '../db/index.js'
 import { dispatchArticle } from './distribution.js'
+import { pruneOldLogs } from './retention.js'
 
 let timer = null
+let retentionTimer = null
+
+const RETENTION_SWEEP_MS = 24 * 60 * 60 * 1000
+
+/** 每天清理一次过期审计/分发日志,避免日志表无限增长 */
+function runRetentionSweep() {
+  try {
+    const { audit, distribution } = pruneOldLogs()
+    if (audit || distribution) {
+      console.log(
+        `[retention] 清理历史日志: 审计 ${audit} 条, 分发 ${distribution} 条`
+      )
+    }
+  } catch (err) {
+    console.error('[retention] 清理历史日志失败:', err)
+  }
+}
 
 /**
  * 扫描到达排期时间的文章，自动将其状态流转为 published (已发布)。
@@ -82,6 +100,10 @@ export function startScheduler(intervalMs = 30000) {
 
   // 防止定时器阻塞进程退出
   if (timer.unref) timer.unref()
+
+  runRetentionSweep()
+  retentionTimer = setInterval(runRetentionSweep, RETENTION_SWEEP_MS)
+  if (retentionTimer.unref) retentionTimer.unref()
 }
 
 /**
@@ -91,5 +113,9 @@ export function stopScheduler() {
   if (timer) {
     clearInterval(timer)
     timer = null
+  }
+  if (retentionTimer) {
+    clearInterval(retentionTimer)
+    retentionTimer = null
   }
 }

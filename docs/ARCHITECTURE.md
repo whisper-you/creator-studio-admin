@@ -42,7 +42,8 @@ creator-studio-admin/
 │   │   ├── security.js           # Helmet 安全头、CORS 白名单与认证端点限流
 │   │   ├── distribution.js       # 多平台 Webhook 分发与通道拟真引擎
 │   │   ├── webhook-url.js        # Webhook 地址校验与 SSRF 防护（云元数据/私网拦截）
-│   │   └── scheduler.js          # 定时发布自动调度引擎 (Worker)
+│   │   ├── retention.js          # 审计/分发日志留存清理（默认 180 / 90 天，0 为永久保留）
+│   │   └── scheduler.js          # 定时发布自动调度与日志清理引擎 (Worker)
 │   ├── routes/                   # RESTful API 控制器路由层
 │   │   ├── auth.js               # 登录/注册/刷新/登出/改密吊销/RBAC 角色流转
 │   │   ├── articles.js           # 文章全功能 CRUD/分页/筛选/批量操作/乐观锁
