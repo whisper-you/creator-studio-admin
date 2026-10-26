@@ -183,6 +183,17 @@ export const authApi = {
   },
 }
 
+/** 服务端批量接口单次上限 100 条,超出时由前端分片提交 */
+const BULK_CHUNK_SIZE = 100
+
+function chunk<T>(items: T[], size = BULK_CHUNK_SIZE): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size))
+  }
+  return chunks
+}
+
 export const articlesApi = {
   /** 拉全量(前端把 store hydrate 成服务端数据) */
   async listAll(): Promise<Article[]> {
@@ -201,15 +212,17 @@ export const articlesApi = {
     })
   },
   async createBulk(articles: Article[]): Promise<void> {
-    await api.post('/articles/bulk', {
-      articles: articles.map((a) => ({
-        ...a,
-        scheduledAt: a.scheduledAt?.toISOString() ?? null,
-        publishedAt: a.publishedAt?.toISOString() ?? null,
-        createdAt: a.createdAt.toISOString(),
-        updatedAt: a.updatedAt.toISOString(),
-      })),
-    })
+    for (const batch of chunk(articles)) {
+      await api.post('/articles/bulk', {
+        articles: batch.map((a) => ({
+          ...a,
+          scheduledAt: a.scheduledAt?.toISOString() ?? null,
+          publishedAt: a.publishedAt?.toISOString() ?? null,
+          createdAt: a.createdAt.toISOString(),
+          updatedAt: a.updatedAt.toISOString(),
+        })),
+      })
+    }
   },
   /**
    * 部分更新。patch 里显式传 null 表示清空日期字段;
@@ -231,14 +244,23 @@ export const articlesApi = {
     patch: Record<string, unknown>,
     versions?: Record<string, number>
   ): Promise<void> {
-    await api.patch(
-      '/articles/bulk',
-      versions ? { ids, patch, versions } : { ids, patch }
-    )
+    for (const batch of chunk(ids)) {
+      const batchVersions = versions
+        ? Object.fromEntries(batch.map((id) => [id, versions[id]!]))
+        : undefined
+      await api.patch(
+        '/articles/bulk',
+        batchVersions
+          ? { ids: batch, patch, versions: batchVersions }
+          : { ids: batch, patch }
+      )
+    }
   },
   async delete(ids: string[]): Promise<void> {
-    if (ids.length === 1) await api.delete(`/articles/${ids[0]}`)
-    else await api.post('/articles/bulk-delete', { ids })
+    for (const batch of chunk(ids)) {
+      if (batch.length === 1) await api.delete(`/articles/${batch[0]}`)
+      else await api.post('/articles/bulk-delete', { ids: batch })
+    }
   },
   /** 阅读上报:后端 views +1,返回最新阅读量 */
   async recordView(id: string): Promise<number> {

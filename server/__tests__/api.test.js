@@ -2170,3 +2170,86 @@ describe('管理员停用与启用账号', () => {
     ).toBe(200)
   })
 })
+
+describe('文章输入规模上限', () => {
+  let token
+
+  const sample = (overrides = {}) => ({
+    id: 'ART-LIMIT-1',
+    title: '输入上限',
+    excerpt: '',
+    content: '',
+    status: 'draft',
+    category: 'tech',
+    tags: [],
+    platforms: [],
+    ...overrides,
+  })
+
+  const create = (body) =>
+    fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify(body),
+    })
+
+  beforeAll(async () => {
+    token = (await (await login()).json()).accessToken
+  })
+
+  it('拒绝超长标题、正文、标签与文章 ID', async () => {
+    expect((await create(sample({ title: 'x'.repeat(201) }))).status).toBe(400)
+    expect((await create(sample({ excerpt: 'x'.repeat(601) }))).status).toBe(
+      400
+    )
+    expect(
+      (await create(sample({ content: 'x'.repeat(200_001) }))).status
+    ).toBe(400)
+    expect(
+      (
+        await create(
+          sample({ tags: Array.from({ length: 21 }, (_, i) => `tag-${i}`) })
+        )
+      ).status
+    ).toBe(400)
+    expect((await create(sample({ tags: ['x'.repeat(31)] }))).status).toBe(400)
+    expect((await create(sample({ id: 'A'.repeat(65) }))).status).toBe(400)
+  })
+
+  it('边界内的长正文可以正常保存', async () => {
+    const res = await create(sample({ content: 'x'.repeat(200_000) }))
+    expect(res.status).toBe(201)
+    expect((await res.json()).content.length).toBe(200_000)
+    await fetch(`${baseUrl}/api/articles/ART-LIMIT-1`, {
+      method: 'DELETE',
+      headers: authed(token),
+    })
+  })
+
+  it('批量接口限制单次条目数', async () => {
+    const articles = Array.from({ length: 101 }, (_, i) =>
+      sample({ id: `ART-OVER-${i}` })
+    )
+    const created = await fetch(`${baseUrl}/api/articles/bulk`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({ articles }),
+    })
+    expect(created.status).toBe(400)
+
+    const ids = Array.from({ length: 101 }, (_, i) => `ART-MISS-${i}`)
+    const patched = await fetch(`${baseUrl}/api/articles/bulk`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ ids, patch: { views: 1 } }),
+    })
+    expect(patched.status).toBe(400)
+
+    const deleted = await fetch(`${baseUrl}/api/articles/bulk-delete`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({ ids }),
+    })
+    expect(deleted.status).toBe(400)
+  })
+})

@@ -24,6 +24,22 @@ const PLATFORMS = [
 
 const AUTHOR_STATUSES = ['draft', 'in_review']
 
+// 输入规模上限:批量接口逐条查询/写入是同步的,超大数组会长时间阻塞事件循环
+const MAX_BULK_ITEMS = 100
+const MAX_ID_LENGTH = 64
+const MAX_TITLE_LENGTH = 200
+const MAX_EXCERPT_LENGTH = 600
+const MAX_CONTENT_LENGTH = 200_000
+const MAX_TAGS = 20
+const MAX_TAG_LENGTH = 30
+
+const idField = z.string().min(1).max(MAX_ID_LENGTH)
+const titleField = z.string().min(1).max(MAX_TITLE_LENGTH)
+const excerptField = z.string().max(MAX_EXCERPT_LENGTH)
+const contentField = z.string().max(MAX_CONTENT_LENGTH)
+const tagsField = z.array(z.string().max(MAX_TAG_LENGTH)).max(MAX_TAGS)
+const idsField = z.array(idField).min(1).max(MAX_BULK_ITEMS)
+
 const forbidden = (res, message = '当前角色无权执行此操作') =>
   res.status(403).json({ message })
 
@@ -58,14 +74,14 @@ const optionalDate = z.preprocess(
 const patchableDate = z.union([z.literal(null), z.coerce.date()]).optional()
 
 const createSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  excerpt: z.string(),
-  content: z.string(),
+  id: idField,
+  title: titleField,
+  excerpt: excerptField,
+  content: contentField,
   status: z.enum(ARTICLE_STATUSES),
   category: z.enum(CATEGORIES),
-  tags: z.array(z.string()).default([]),
-  platforms: z.array(z.enum(PLATFORMS)).default([]),
+  tags: tagsField.default([]),
+  platforms: z.array(z.enum(PLATFORMS)).max(PLATFORMS.length).default([]),
   views: z.number().int().nonnegative().default(0),
   likes: z.number().int().nonnegative().default(0),
   scheduledAt: optionalDate,
@@ -76,13 +92,13 @@ const createSchema = z.object({
 // 填入默认值,把 tags/platforms 等意外重置
 const patchSchema = z
   .object({
-    title: z.string().min(1),
-    excerpt: z.string(),
-    content: z.string(),
+    title: titleField,
+    excerpt: excerptField,
+    content: contentField,
     status: z.enum(ARTICLE_STATUSES),
     category: z.enum(CATEGORIES),
-    tags: z.array(z.string()),
-    platforms: z.array(z.enum(PLATFORMS)),
+    tags: tagsField,
+    platforms: z.array(z.enum(PLATFORMS)).max(PLATFORMS.length),
     views: z.number().int().nonnegative(),
     likes: z.number().int().nonnegative(),
     scheduledAt: patchableDate,
@@ -245,7 +261,7 @@ articlesRouter.post('/', (req, res) => {
 
 articlesRouter.post('/bulk', (req, res) => {
   const schema = z.object({
-    articles: z.array(createSchema).min(1),
+    articles: z.array(createSchema).min(1).max(MAX_BULK_ITEMS),
   })
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) {
@@ -300,7 +316,7 @@ articlesRouter.post('/bulk', (req, res) => {
 
 articlesRouter.patch('/bulk', (req, res) => {
   const schema = z.object({
-    ids: z.array(z.string()).min(1),
+    ids: idsField,
     patch: patchSchema,
     // 可选:按文章 ID 提供读取时的版本号,任何一条不匹配则整批拒绝
     versions: z.record(z.string(), z.number().int().positive()).optional(),
@@ -488,9 +504,7 @@ articlesRouter.post('/:id/view', (req, res) => {
 })
 
 articlesRouter.post('/bulk-delete', (req, res) => {
-  const parsed = z
-    .object({ ids: z.array(z.string()).min(1) })
-    .safeParse(req.body)
+  const parsed = z.object({ ids: idsField }).safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ message: '字段校验失败' })
   const rows = parsed.data.ids.map((id) =>
     db.prepare('SELECT * FROM articles WHERE id = ?').get(id)

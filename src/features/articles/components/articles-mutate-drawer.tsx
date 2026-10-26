@@ -68,13 +68,29 @@ type ArticleMutateDrawerProps = {
   onSubmitData?: (values: ArticleForm, scheduled: Date | undefined) => void
 }
 
+const parseTags = (raw: string) =>
+  raw
+    .split(/[,,、;;\s]+/u)
+    .map((t) => t.trim())
+    .filter(Boolean)
+
+// 与服务端字段上限保持一致,让用户在提交前就看到具体提示
+const MAX_TAGS = 20
+const MAX_TAG_LENGTH = 30
+
 const formSchema = z.object({
-  title: z.string().min(1, '请输入标题'),
+  title: z.string().min(1, '请输入标题').max(200, '标题不能超过 200 字符'),
   category: z.enum(ARTICLE_CATEGORIES),
   status: z.enum(ARTICLE_STATUSES),
-  excerpt: z.string().min(1, '请填写摘要'),
-  content: z.string(),
-  tags: z.string(),
+  excerpt: z.string().min(1, '请填写摘要').max(600, '摘要不能超过 600 字符'),
+  content: z.string().max(200_000, '正文不能超过 20 万字符'),
+  tags: z.string().refine((raw) => {
+    const tags = parseTags(raw)
+    return (
+      tags.length <= MAX_TAGS &&
+      tags.every((tag) => tag.length <= MAX_TAG_LENGTH)
+    )
+  }, `最多 ${MAX_TAGS} 个标签,每个不超过 ${MAX_TAG_LENGTH} 字符`),
   platforms: z
     .array(
       z.enum([
@@ -90,12 +106,6 @@ const formSchema = z.object({
   scheduledAt: z.date().optional(),
 })
 type ArticleForm = z.infer<typeof formSchema>
-
-const parseTags = (raw: string) =>
-  raw
-    .split(/[,,、;;\s]+/u)
-    .map((t) => t.trim())
-    .filter(Boolean)
 
 export function ArticlesMutateDrawer({
   open,
@@ -351,7 +361,11 @@ export function ArticlesMutateDrawer({
                     </Popover>
                   </div>
                   <FormControl>
-                    <Input {...field} placeholder='输入文章标题' />
+                    <Input
+                      {...field}
+                      placeholder='输入文章标题'
+                      maxLength={200}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -460,6 +474,7 @@ export function ArticlesMutateDrawer({
                     <Textarea
                       {...field}
                       rows={2}
+                      maxLength={600}
                       placeholder='一句话说清这篇文章的价值'
                     />
                   </FormControl>
