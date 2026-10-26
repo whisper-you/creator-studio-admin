@@ -44,6 +44,8 @@ const actionLabels: Record<string, string> = {
   'auth.session_revoke': '撤销登录设备',
   'auth.session_revoke_others': '退出其他设备',
   'user.role_change': '角色变更',
+  'user.disable': '停用用户',
+  'user.enable': '启用用户',
   'user.reset_password': '重置用户密码',
   'user.force_logout': '强制下线用户',
   'article.status_change': '文章状态变更',

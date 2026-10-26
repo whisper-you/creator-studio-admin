@@ -7,6 +7,8 @@ import {
   KeyRound,
   LogOut,
   RefreshCw,
+  ShieldBan,
+  ShieldCheck,
   UserCog,
   Users,
 } from 'lucide-react'
@@ -95,6 +97,8 @@ export function UsersPage() {
   const [resetting, setResetting] = useState(false)
   const [logoutTarget, setLogoutTarget] = useState<UserListItem | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [statusTarget, setStatusTarget] = useState<UserListItem | null>(null)
+  const [togglingStatus, setTogglingStatus] = useState(false)
 
   const authorized = user?.role === 'admin'
   const checking = !user && !!accessToken
@@ -161,6 +165,27 @@ export function UsersPage() {
       toast.error(errorMessageOf(err, '重置密码失败,请稍后重试'))
     } finally {
       setResetting(false)
+    }
+  }
+
+  const handleToggleStatus = async () => {
+    if (!statusTarget) return
+    const nextDisabled = !statusTarget.disabled
+    setTogglingStatus(true)
+    try {
+      const res = await usersApi.setStatus(statusTarget.id, nextDisabled)
+      toast.success(
+        nextDisabled
+          ? `已停用 ${statusTarget.email},吊销 ${res.revokedSessions} 个会话`
+          : `已启用 ${statusTarget.email}`
+      )
+      setStatusTarget(null)
+      setLoading(true)
+      setRefreshKey((k) => k + 1)
+    } catch (err) {
+      toast.error(errorMessageOf(err, '操作失败,请稍后重试'))
+    } finally {
+      setTogglingStatus(false)
     }
   }
 
@@ -260,7 +285,7 @@ export function UsersPage() {
                 账号列表
               </CardTitle>
               <CardDescription>
-                重置密码会立即吊销该用户全部会话;强制下线可让已登录设备立刻退出。
+                停用账号会立即让其掉线并禁止登录;重置密码会吊销全部会话;强制下线可让已登录设备立刻退出。
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -271,7 +296,7 @@ export function UsersPage() {
                     <TableHead className='w-28'>角色</TableHead>
                     <TableHead className='w-28'>活跃会话</TableHead>
                     <TableHead className='w-44'>注册时间</TableHead>
-                    <TableHead className='w-64 text-end'>操作</TableHead>
+                    <TableHead className='w-80 text-end'>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -296,6 +321,11 @@ export function UsersPage() {
                                 <span className='ms-2 text-xs text-muted-foreground'>
                                   (当前账号)
                                 </span>
+                              )}
+                              {row.disabled && (
+                                <Badge variant='destructive' className='ms-2'>
+                                  已停用
+                                </Badge>
                               )}
                             </div>
                             <div className='text-xs text-muted-foreground'>
@@ -332,6 +362,21 @@ export function UsersPage() {
                                 }}
                               >
                                 <UserCog className='size-3.5' />
+                              </Button>
+                              <Button
+                                variant='outline'
+                                size='icon'
+                                className='size-8'
+                                disabled={isSelf}
+                                title={row.disabled ? '启用账号' : '停用账号'}
+                                aria-label={`${row.disabled ? '启用' : '停用'} ${row.email}`}
+                                onClick={() => setStatusTarget(row)}
+                              >
+                                {row.disabled ? (
+                                  <ShieldCheck className='size-3.5' />
+                                ) : (
+                                  <ShieldBan className='size-3.5' />
+                                )}
                               </Button>
                               <Button
                                 variant='outline'
@@ -493,6 +538,29 @@ export function UsersPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!statusTarget}
+        onOpenChange={(open) => {
+          if (!open) setStatusTarget(null)
+        }}
+        title={statusTarget?.disabled ? '启用账号' : '停用账号'}
+        desc={
+          statusTarget?.disabled
+            ? `启用后 ${statusTarget?.email ?? ''} 可重新登录,历史会话不会自动恢复。`
+            : `停用后 ${statusTarget?.email ?? ''} 将立即下线且无法登录,直到再次启用。`
+        }
+        confirmText={
+          togglingStatus
+            ? '处理中…'
+            : statusTarget?.disabled
+              ? '启用账号'
+              : '停用账号'
+        }
+        destructive={!statusTarget?.disabled}
+        isLoading={togglingStatus}
+        handleConfirm={handleToggleStatus}
+      />
 
       <ConfirmDialog
         open={!!logoutTarget}

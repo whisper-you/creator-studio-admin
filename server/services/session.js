@@ -89,6 +89,10 @@ export function consumeRefreshToken(rawToken, meta = {}) {
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(row.user_id)
   if (!user) return { status: 'invalid' }
+  if (user.disabled_at) {
+    revokeAllRefreshTokens(row.user_id, 'account_disabled')
+    return { status: 'disabled', userId: row.user_id }
+  }
 
   // 条件更新防止并发刷新同时轮换成功
   const rotated = db
@@ -164,12 +168,8 @@ export function revokeOtherSessions(userId, currentToken) {
       `UPDATE refresh_tokens SET revoked_at = ?, revoked_reason = 'session_revoke_others'
        WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ? AND token_hash != ?`
     )
-    .run(
-      now,
-      userId,
-      now,
-      currentToken ? hashRefreshToken(currentToken) : ''
-    ).changes
+    .run(now, userId, now, currentToken ? hashRefreshToken(currentToken) : '')
+    .changes
 }
 
 export function readRefreshCookie(req) {

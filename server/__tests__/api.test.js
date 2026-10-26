@@ -1949,3 +1949,126 @@ describe('管理员用户管理:重置密码与强制下线', () => {
     expect((await getMe(adminToken)).status).toBe(200)
   })
 })
+
+describe('管理员停用与启用账号', () => {
+  const email = 'disabled-user@test.dev'
+  const password = 'password123'
+  let adminToken
+  let adminId
+  let target
+
+  const registerUser = async () => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name: '停用测试' }),
+    })
+    const body = await res.json()
+    return {
+      id: body.user.id,
+      token: body.accessToken,
+      cookie: refreshCookieOf(res),
+    }
+  }
+
+  const setStatus = (id, disabled, token = adminToken) =>
+    fetch(`${baseUrl}/api/users/${id}/status`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ disabled }),
+    })
+
+  const findRow = async () => {
+    const body = await (
+      await fetch(`${baseUrl}/api/users?pageSize=100&q=disabled-user`, {
+        headers: authed(adminToken),
+      })
+    ).json()
+    return body.data.find((row) => row.id === target.id)
+  }
+
+  const listAudit = async (action) =>
+    (
+      await (
+        await fetch(`${baseUrl}/api/audit-logs?pageSize=100&action=${action}`, {
+          headers: authed(adminToken),
+        })
+      ).json()
+    ).data
+
+  beforeAll(async () => {
+    const res = await login()
+    const body = await res.json()
+    adminToken = body.accessToken
+    adminId = body.user.id
+    target = await registerUser()
+  })
+
+  it('非管理员不能停用或启用账号', async () => {
+    expect((await setStatus(target.id, true, target.token)).status).toBe(403)
+  })
+
+  it('停用后立即吊销会话并禁止登录,启用后恢复', async () => {
+    const res = await setStatus(target.id, true)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toMatchObject({ ok: true, disabled: true })
+    expect(body.revokedSessions).toBeGreaterThanOrEqual(1)
+
+    const row = await findRow()
+    expect(row.disabled).toBe(true)
+    expect(row.activeSessions).toBe(0)
+
+    // 已签发的 access token 立即失效,refresh 也无法续期
+    expect(
+      (await fetch(`${baseUrl}/api/auth/me`, { headers: authed(target.token) }))
+        .status
+    ).toBe(401)
+    expect((await refreshWith(target.cookie)).status).toBe(401)
+
+    const blocked = await login(email, password)
+    expect(blocked.status).toBe(403)
+    expect((await blocked.json()).message).toContain('禁用')
+
+    const enabled = await setStatus(target.id, false)
+    expect(enabled.status).toBe(200)
+    expect((await enabled.json()).disabled).toBe(false)
+    expect((await findRow()).disabled).toBe(false)
+
+    const relogin = await login(email, password)
+    expect(relogin.status).toBe(200)
+
+    // 启用后新登录的会话在再次停用时同样立即失效
+    const fresh = await relogin.json()
+    const freshCookie = refreshCookieOf(relogin)
+    expect((await setStatus(target.id, true)).status).toBe(200)
+    expect(
+      (
+        await fetch(`${baseUrl}/api/auth/me`, {
+          headers: authed(fresh.accessToken),
+        })
+      ).status
+    ).toBe(401)
+    expect((await refreshWith(freshCookie)).status).toBe(401)
+
+    const disableLog = (await listAudit('user.disable')).find(
+      (log) => log.entityId === target.id
+    )
+    expect(disableLog).toBeTruthy()
+    expect(disableLog.actorEmail).toBe('creator@studio.dev')
+    expect(disableLog.detail.revokedSessions).toBeGreaterThanOrEqual(1)
+
+    const enableLogs = await listAudit('user.enable')
+    expect(enableLogs.some((log) => log.entityId === target.id)).toBe(true)
+  })
+
+  it('参数校验、目标不存在与自我保护', async () => {
+    expect((await setStatus(target.id, 'yes')).status).toBe(400)
+    expect((await setStatus('999999', true)).status).toBe(404)
+    expect((await setStatus(adminId, true)).status).toBe(400)
+    expect(
+      (await fetch(`${baseUrl}/api/auth/me`, { headers: authed(adminToken) }))
+        .status
+    ).toBe(200)
+  })
+})

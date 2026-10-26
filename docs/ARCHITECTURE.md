@@ -46,7 +46,7 @@ creator-studio-admin/
 │   │   ├── auth.js               # 登录/注册/刷新/登出/改密吊销/RBAC 角色流转
 │   │   ├── articles.js           # 文章全功能 CRUD/分页/筛选/批量操作/乐观锁
 │   │   ├── audit.js              # 审计日志查询（仅管理员）
-│   │   ├── users.js              # 用户列表、角色调整、重置密码与强制下线（仅管理员）
+│   │   ├── users.js              # 用户列表、角色调整、停用/启用、重置密码与强制下线（仅管理员）
 │   │   ├── channels.js           # 渠道绑定与 Webhook 连通性测试探针
 │   │   ├── materials.js          # 本地图床素材上传（格式/大小/魔数校验）与列表管理
 │   │   ├── distribution.js       # 渠道分发日志查询与手动触发

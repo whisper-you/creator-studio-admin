@@ -330,6 +330,7 @@ const userListItemSchema = z.object({
   email: z.string(),
   name: z.string(),
   role: roleSchema,
+  disabled: z.boolean().default(false),
   createdAt: z.string(),
   activeSessions: z.number(),
 })
@@ -353,6 +354,16 @@ export const usersApi = {
       await api.patch<{ ok: boolean; role: UserRole }>(`/users/${id}/role`, {
         role,
       })
+    ).data
+  },
+  /** 停用后目标用户立即掉线且无法再登录,启用后恢复 */
+  async setStatus(id: string, disabled: boolean) {
+    return (
+      await api.patch<{
+        ok: boolean
+        disabled: boolean
+        revokedSessions: number
+      }>(`/users/${id}/status`, { disabled })
     ).data
   },
   /** 重置后目标用户全部会话立即失效 */

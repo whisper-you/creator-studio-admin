@@ -30,7 +30,7 @@ usersRouter.get('/', (req, res) => {
     .get(params).c
   const rows = db
     .prepare(
-      `SELECT id, email, name, role, created_at FROM users ${where}
+      `SELECT id, email, name, role, created_at, disabled_at FROM users ${where}
        ORDER BY id ASC LIMIT @limit OFFSET @offset`
     )
     .all({ ...params, limit: pageSize, offset: (page - 1) * pageSize })
@@ -50,6 +50,7 @@ usersRouter.get('/', (req, res) => {
       email: row.email,
       name: row.name,
       role: row.role || 'author',
+      disabled: !!row.disabled_at,
       createdAt: row.created_at,
       activeSessions: sessionCount.get(row.id) ?? 0,
     })),
@@ -64,7 +65,9 @@ const findUser = (rawId) => {
   if (!Number.isInteger(id) || id <= 0) return null
   return (
     db
-      .prepare('SELECT id, email, name, role FROM users WHERE id = ?')
+      .prepare(
+        'SELECT id, email, name, role, disabled_at FROM users WHERE id = ?'
+      )
       .get(id) ?? null
   )
 }
@@ -103,6 +106,52 @@ usersRouter.patch('/:id/role', (req, res) => {
   }
 
   res.json({ ok: true, role: to })
+})
+
+const statusSchema = z.object({
+  disabled: z.boolean(),
+})
+
+/**
+ * 停用/启用账号。
+ * 停用会递增 token_version 并吊销全部 refresh token,目标用户立即掉线且无法再登录。
+ */
+usersRouter.patch('/:id/status', (req, res) => {
+  const target = findUser(req.params.id)
+  if (!target) return res.status(404).json({ message: '用户不存在' })
+  if (String(target.id) === req.userId) {
+    return res.status(400).json({ message: '不能停用自己的账号' })
+  }
+
+  const parsed = statusSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: 'disabled 必须是布尔值' })
+  }
+  const { disabled } = parsed.data
+  if (disabled === !!target.disabled_at) {
+    return res.json({ ok: true, disabled, revokedSessions: 0 })
+  }
+
+  let revokedSessions = 0
+  if (disabled) {
+    db.prepare(
+      'UPDATE users SET disabled_at = ?, token_version = token_version + 1 WHERE id = ?'
+    ).run(new Date().toISOString(), target.id)
+    revokedSessions = revokeAllRefreshTokens(target.id, 'account_disabled')
+  } else {
+    db.prepare('UPDATE users SET disabled_at = NULL WHERE id = ?').run(
+      target.id
+    )
+  }
+
+  recordAudit(req, {
+    action: disabled ? 'user.disable' : 'user.enable',
+    entityType: 'user',
+    entityId: target.id,
+    detail: { email: target.email, revokedSessions },
+  })
+
+  res.json({ ok: true, disabled, revokedSessions })
 })
 
 const resetPasswordSchema = z.object({

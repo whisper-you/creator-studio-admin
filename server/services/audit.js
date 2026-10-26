@@ -6,6 +6,8 @@ const ACTIONS = [
   'auth.session_revoke',
   'auth.session_revoke_others',
   'user.role_change',
+  'user.disable',
+  'user.enable',
   'user.reset_password',
   'user.force_logout',
   'article.status_change',

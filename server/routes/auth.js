@@ -63,10 +63,14 @@ export function requireAuth(req, res, next) {
     const payload = jwt.verify(token, JWT_SECRET)
     const user = db
       .prepare(
-        'SELECT id, email, name, role, token_version FROM users WHERE id = ?'
+        'SELECT id, email, name, role, token_version, disabled_at FROM users WHERE id = ?'
       )
       .get(payload.sub)
     if (!user) return res.status(401).json({ message: '用户不存在' })
+    // 停用后即使 access token 未过期也立即拒绝
+    if (user.disabled_at) {
+      return res.status(401).json({ message: '账号已被禁用,请联系管理员' })
+    }
     // 改密后 token_version 递增,旧 token 立即失效
     if (Number(payload.ver ?? 1) !== Number(user.token_version ?? 1)) {
       return res.status(401).json({ message: '登录状态已失效,请重新登录' })
@@ -141,6 +145,9 @@ authRouter.post('/login', (req, res) => {
   if (!user || !compareSync(parsed.data.password, user.password_hash)) {
     return res.status(401).json({ message: '邮箱或密码错误' })
   }
+  if (user.disabled_at) {
+    return res.status(403).json({ message: '账号已被禁用,请联系管理员' })
+  }
   res.json(issueSession(req, res, user))
 })
 
@@ -167,6 +174,9 @@ authRouter.post('/refresh', (req, res) => {
   }
   if (result.status !== 'ok') {
     clearRefreshCookie(res)
+    if (result.status === 'disabled') {
+      return res.status(403).json({ message: '账号已被禁用,请联系管理员' })
+    }
     return res.status(401).json({
       message:
         result.status === 'reused'
@@ -192,10 +202,7 @@ authRouter.post('/logout', (req, res) => {
 
 /** 当前账号的登录设备列表(仅返回未撤销且未过期的会话) */
 authRouter.get('/sessions', requireAuth, (req, res) => {
-  const currentId = findSessionIdByToken(
-    req.userId,
-    readRefreshCookie(req)
-  )
+  const currentId = findSessionIdByToken(req.userId, readRefreshCookie(req))
   const rows = listUserSessions(req.userId)
   res.json({
     data: rows.map((row) => ({
@@ -217,12 +224,11 @@ authRouter.delete('/sessions/:id', requireAuth, (req, res) => {
   if (!Number.isInteger(sessionId) || sessionId <= 0) {
     return res.status(404).json({ message: '会话不存在或已失效' })
   }
-  const currentId = findSessionIdByToken(
-    req.userId,
-    readRefreshCookie(req)
-  )
+  const currentId = findSessionIdByToken(req.userId, readRefreshCookie(req))
   if (sessionId === currentId) {
-    return res.status(400).json({ message: '请使用退出登录来结束当前设备的会话' })
+    return res
+      .status(400)
+      .json({ message: '请使用退出登录来结束当前设备的会话' })
   }
 
   const revoked = revokeUserSession(req.userId, sessionId)

@@ -133,6 +133,10 @@ try {
 } catch (_) {}
 
 try {
+  db.exec('ALTER TABLE users ADD COLUMN disabled_at TEXT')
+} catch (_) {}
+
+try {
   db.exec('ALTER TABLE channels ADD COLUMN webhook_url TEXT')
 } catch (_) {}
 
