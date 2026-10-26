@@ -25,6 +25,7 @@
 creator-studio-admin/
 ├── docs/                         # 规范文档中心
 │   ├── ARCHITECTURE.md           # 架构设计与规范（本文档）
+│   ├── PRODUCTION.md             # 生产环境边界、备份与扩容说明
 │   └── ROADMAP.md                # 演进路线图与历史里程碑
 ├── server/                       # 生产级轻量后端服务
 │   ├── index.js                  # 应用入口、单容器静态托管、调度器挂载
@@ -32,18 +33,28 @@ creator-studio-admin/
 │   │   ├── index.js              # node:sqlite 原生数据库初始化与事务封装
 │   │   └── seed.js               # 确定性种子数据生成算法
 │   ├── services/                 # 核心业务服务层
+│   │   ├── article-status.js     # 文章状态机与流转规则（与前端 statusFlow 对齐）
+│   │   ├── audit.js              # 敏感操作审计日志写入与分页查询
+│   │   ├── jwt-secret.js         # JWT 密钥解析与生产环境启动校验
+│   │   ├── observability.js      # X-Request-Id、结构化访问日志与就绪检查
+│   │   ├── seed-policy.js        # 演示数据开关与生产管理员引导策略
+│   │   ├── security.js           # Helmet 安全头、CORS 白名单与认证端点限流
 │   │   ├── distribution.js       # 多平台 Webhook 分发与通道拟真引擎
 │   │   └── scheduler.js          # 定时发布自动调度引擎 (Worker)
 │   ├── routes/                   # RESTful API 控制器路由层
-│   │   ├── auth.js               # 登录/注册/JWT 签发/RBAC 角色流转
-│   │   ├── articles.js           # 文章全功能 CRUD/分页/筛选/批量操作
+│   │   ├── auth.js               # 登录/注册/JWT 签发/改密与 token 版本吊销/RBAC 角色流转
+│   │   ├── articles.js           # 文章全功能 CRUD/分页/筛选/批量操作/乐观锁
+│   │   ├── audit.js              # 审计日志查询（仅管理员）
 │   │   ├── channels.js           # 渠道绑定与 Webhook 连通性测试探针
-│   │   ├── materials.js          # 本地图床素材上传与列表管理
+│   │   ├── materials.js          # 本地图床素材上传（格式/大小/魔数校验）与列表管理
 │   │   ├── distribution.js       # 渠道分发日志查询与手动触发
 │   │   ├── comments.js           # 读者评论审核流
 │   │   └── stats.js              # 数据看板时序与多维统计
 │   └── __tests__/                # 后端自动化测试套件
-│       └── api.test.js           # 完整 Express API 集成测试
+│       ├── api.test.js           # 完整 Express API 集成测试
+│       ├── security.test.js      # 安全响应头/CORS/限流测试
+│       ├── observability.test.js # 健康检查、请求 ID 与 API 404 测试
+│       └── ...                   # JWT 密钥、种子策略等专项测试
 ├── src/                          # 现代化前端工程
 │   ├── features/                 # 业务能力切片（Domain-Driven）
 │   │   ├── articles/             # 文章管理领域
@@ -55,7 +66,8 @@ creator-studio-admin/
 │   │   │   │   ├── parse-markdown.ts   # Frontmatter YAML 解析器
 │   │   │   │   ├── export-article.ts   # Markdown / A4 PDF 导出器
 │   │   │   │   └── download-csv.ts     # CSV 报表导出器
-│   │   │   └── store.ts          # 文章持久化与乐观更新 Store
+│   │   │   └── store.ts          # 文章持久化、乐观更新与 409 冲突刷新
+│   │   ├── audit-logs/           # 管理员操作审计日志查询页
 │   │   ├── schedule/             # 内容排期日历模块
 │   │   ├── channels/             # 渠道绑定与 Webhook 配置模块
 │   │   ├── materials/            # 本地自托管素材库模块

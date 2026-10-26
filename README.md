@@ -9,7 +9,7 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express)
 ![SQLite](https://img.shields.io/badge/SQLite-node:sqlite-003B57?style=flat-square&logo=sqlite)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
-![Tests](https://img.shields.io/badge/Tests-48%20Passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-119%20Passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 <p align="center">
@@ -105,7 +105,13 @@
   | 👑 **超级管理员 (Admin)** | 全量管理权限（创建、直接发布、排期发布、删除、分发、系统设置与图床运维） |
   | ✍️ **主编/审批员 (Editor)** | 内容终审权限（可发布、排期、审核通过、执行各渠道分发；不可删除他人文章） |
   | 📝 **创作者 (Author)** | 创作与提交权限（仅可保存草稿 `draft` 或**提交审核 `in_review`**；无权越权发布、排期或物理删除） |
-- **无缝身份切换器**：右上角个人头像下拉框提供一键切换 Admin / Editor / Author 角色，便于多角色流程验证。
+- **服务端强制校验**：所有写操作接口都会校验角色与文章归属（`author_id`），前端菜单隐藏只是体验层，越权请求会返回 403。
+- **服务端状态机**：文章状态只能沿 `draft → in_review → scheduled → published → archived → draft` 流转（排期可从任意状态进入 `scheduled`），非法流转返回 409；批量更新中任意一条非法则整批拒绝，不会部分落库。
+- **文章乐观锁**：更新携带读取时的 `version`，版本不一致返回 409 与最新版本号；前端自动刷新为服务端数据，避免多人协作时静默覆盖。批量更新同样支持版本映射，任一过期则整批回滚。
+- **操作审计日志**：改密、角色变更、文章状态变更/删除、渠道配置与手动分发都会写入 `audit_logs`；管理员可在「操作日志」页面按动作与操作者筛选追溯。
+- **自助改密与令牌吊销**：登录后可在「设置 → 个人资料」修改密码；服务端校验当前密码并递增 `token_version`，该账号所有旧 JWT 立即失效，当前会话自动换发新 token，其他设备需重新登录。
+- **安全边界加固**：Helmet 安全响应头（含 CSP）、CORS 白名单（默认仅同源）、登录/注册/改密限流；图床上传仅允许 PNG/JPEG/WebP/GIF 且单图不超过 5 MB，并校验文件头，详见 [生产环境边界说明](./docs/PRODUCTION.md)。
+- **无缝身份切换器**：右上角个人头像下拉框提供一键切换 Admin / Editor / Author 角色，便于多角色流程验证。该功能默认仅在非生产环境开放；生产环境如需保留演示能力，可显式设置 `ALLOW_ROLE_SWITCH=true`。
 
 ---
 
@@ -125,14 +131,14 @@
 ```text
 creator-studio-admin/
 ├── server/                      # 极速轻量后端 (Express 5 + node:sqlite)
-│   ├── index.js                 # 后端入口 & 静态托管 dist & 自动调度器启动
-│   ├── db.js                    # node:sqlite 原生建表、迁移与初始种子
-│   ├── scheduler.js             # 排期自动发布与自动分发后台 Worker
-│   ├── distribution.js          # Webhook 外部调度与拟真分发引擎
-│   └── routes/                  # RESTful API 路由模块 (auth, articles, channels, etc.)
+│   ├── index.js                 # 后端入口 & 静态托管 dist & 健康检查 & 优雅停机
+│   ├── db/                      # node:sqlite 建表、迁移与确定性种子数据
+│   ├── services/                # 业务服务层 (状态机 / 调度 / 分发 / 审计 / 安全 / 可观测性)
+│   ├── routes/                  # RESTful API 路由模块 (auth, articles, channels, etc.)
+│   └── __tests__/               # 服务端集成与专项测试
 ├── src/                         # 现代化前端 (React 19 + Vite 6 + Tailwind v4)
-│   ├── features/                # 业务能力切片 (articles, schedule, channels, dashboard)
-│   ├── lib/                     # 核心工具层 (ai-assistant, wechat-formatter, parse-markdown, export)
+│   ├── features/                # 业务能力切片 (articles, schedule, channels, audit-logs...)
+│   ├── lib/                     # 核心工具层 (API 客户端 / 文章 AI 助手 / 排版 / 导出)
 │   ├── stores/                  # 全局状态管理 (Zustand + 持久化 + 服务端同步)
 │   └── components/              # 基础 UI 部件 (shadcn/ui + Radix UI)
 └── uploads/                     # 本地自托管图床持久化静态资源目录
@@ -140,16 +146,17 @@ creator-studio-admin/
 
 ### 核心技术栈清单
 
-| 分层 | 技术选型 | 说明 |
-| :--- | :--- | :--- |
-| **前端框架** | React 19 + TypeScript 5 | 极致渲染性能，拥抱最新 React Hooks 与类型安全标准 |
-| **构建工具** | Vite 6 + `@tailwindcss/vite` | 秒级冷启动与极速热重载，Tailwind CSS v4 现代样式引擎 |
-| **路由与状态** | TanStack Router + Zustand | 类型安全路由、URL Search 参数双向同步持久化、乐观更新 |
-| **表格与展示** | TanStack Table + Recharts | 高性能数据分页、列显隐、Faceted 筛选器与丰富图表可视化 |
-| **UI 组件库** | Radix UI + shadcn/ui + Lucide | 优雅可访问的现代化设计系统，全面支持深色/浅色模式 |
-| **服务端** | Express 5 + Node.js `node:sqlite` | 采用 Node 内置原生 SQLite，**零原生编译 (Zero C++ Addons)** |
-| **鉴权与加密** | JWT (jsonwebtoken) + bcryptjs | 标准 Bearer Token 鉴权，密码强哈希存储 |
-| **测试套件** | Vitest + Playwright + Coverage | 包含前端组件浏览器测试与完整服务端 API 集成测试 |
+| 分层           | 技术选型                          | 说明                                                        |
+| :------------- | :-------------------------------- | :---------------------------------------------------------- |
+| **前端框架**   | React 19 + TypeScript 5           | 极致渲染性能，拥抱最新 React Hooks 与类型安全标准           |
+| **构建工具**   | Vite 6 + `@tailwindcss/vite`      | 秒级冷启动与极速热重载，Tailwind CSS v4 现代样式引擎        |
+| **路由与状态** | TanStack Router + Zustand         | 类型安全路由、URL Search 参数双向同步持久化、乐观更新       |
+| **表格与展示** | TanStack Table + Recharts         | 高性能数据分页、列显隐、Faceted 筛选器与丰富图表可视化      |
+| **UI 组件库**  | Radix UI + shadcn/ui + Lucide     | 优雅可访问的现代化设计系统，全面支持深色/浅色模式           |
+| **服务端**     | Express 5 + Node.js `node:sqlite` | 采用 Node 内置原生 SQLite，**零原生编译 (Zero C++ Addons)** |
+| **鉴权与加密** | JWT (jsonwebtoken) + bcryptjs     | 标准 Bearer Token 鉴权，密码强哈希存储                      |
+| **安全防护**   | Helmet + express-rate-limit       | CSP 等安全响应头、CORS 白名单、认证端点限流                 |
+| **测试套件**   | Vitest + Playwright + Coverage    | 包含前端组件浏览器测试与完整服务端 API 集成测试             |
 
 ---
 
@@ -158,6 +165,7 @@ creator-studio-admin/
 ### 1. 环境准备
 
 确保您的本地环境中安装了以下基础工具：
+
 - **Node.js** >= `20.12.0` (推荐 Node.js LTS 22，需支持原生 `node:sqlite`)
 - **pnpm** >= `9.0.0` (推荐包管理器，亦支持 npm/yarn)
 
@@ -181,6 +189,7 @@ cp .env.example .env
 ```
 
 `.env` 默认配置如下：
+
 ```ini
 # 前端请求后端 API 基础路径 (开发模式留空默认走 Vite 代理，独立部署时可填写如 http://localhost:5180)
 VITE_API_BASE=
@@ -188,9 +197,34 @@ VITE_API_BASE=
 # 后端服务监听端口 (默认 5180)
 API_PORT=5180
 
-# JWT 鉴权密钥 (生产环境建议修改为强随机字符串)
-JWT_SECRET=change-me-in-production
+# JWT 鉴权密钥
+# - 开发环境可留空,自动回退到内置开发密钥
+# - 生产环境必填:至少 32 位随机字符串,可用 `openssl rand -hex 32` 生成
+JWT_SECRET=
+
+# 生产环境空库首次启动的管理员账号 (必须成对设置,密码至少 8 位)
+# 已有数据库时可省略
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+# ADMIN_NAME=管理员
+
+# 是否注入演示数据 (文章/素材/评论与默认口令演示账号)
+# 默认:开发/测试 true,生产 false。生产环境开启仅用于演示部署
+# SEED_DEMO_DATA=false
+
+# 跨域白名单 (逗号分隔)。默认:开发/测试放行本地 Vite,生产仅同源
+# 前后端同源部署或使用 Vite 代理时无需配置
+# CORS_ORIGINS=https://admin.example.com
+
+# 反向代理层数 (如 Nginx 后设为 1),限流按真实客户端 IP 计数
+# TRUST_PROXY=1
+
+# 认证端点限流 (默认:登录 30 次/15 分钟,注册 5 次/小时,改密 10 次/15 分钟)
+# AUTH_RATE_LIMIT_MAX=30
+# REGISTER_RATE_LIMIT_MAX=5
 ```
+
+> `pnpm run server` 与 `pnpm start` 会自动加载根目录 `.env`（已存在于 shell 的环境变量优先）。
 
 ### 4. 启动开发服务
 
@@ -202,16 +236,19 @@ pnpm dev:all
 pnpm dev
 
 # 仅启动后端 API 接口服务
-pnpm server
+pnpm run server
 ```
 
 启动完成后，打开浏览器访问：**`http://localhost:5173`**
 
-### 5. 默认内置演示账号
+### 5. 默认内置演示账号（仅开发/演示环境）
 
-后端首次启动时会自动初始化 SQLite 数据库并注入演示数据：
+非生产环境首次启动时会自动初始化 SQLite 数据库并注入演示数据：
+
 - **超级管理员账号**：`creator@studio.dev`
 - **默认密码**：`creator123`
+
+> 生产环境默认不注入演示数据。空库首次启动必须通过 `ADMIN_EMAIL` / `ADMIN_PASSWORD` 创建管理员，否则服务会拒绝启动；只有显式设置 `SEED_DEMO_DATA=true` 才会生成上述演示账号。
 
 ---
 
@@ -219,11 +256,20 @@ pnpm server
 
 本项目原生支持 **单容器全栈部署** 与 **传统 Node.js 主机部署** 两种形态。
 
+> ⚠️ 上线前请先阅读 [生产环境边界说明](./docs/PRODUCTION.md)：当前架构为单机 SQLite + 单进程调度器 + 本地磁盘图床，适用于个人或小团队内部使用，不支持多副本水平扩容。
+
 ### 方式一：Docker Compose 一键部署 (强烈推荐)
 
 项目已在 [`docker/`](./docker) 目录下提供多阶段构建镜像定义与容器编排文件。构建阶段编译前端静态资源，运行时阶段采用极简 Node.js Alpine 容器，同时托管后端 API 与前端产物。
 
 ```bash
+# 0. 生成并导出生产密钥 (compose 会读取当前 shell 环境;缺失或过短会拒绝启动)
+export JWT_SECRET=$(openssl rand -hex 32)
+
+# 空库首次启动还需提供初始管理员 (已有数据库时可省略)
+export ADMIN_EMAIL=ops@example.com
+export ADMIN_PASSWORD='请替换为至少 8 位的强密码'
+
 # 【方式 A】通过 npm scripts 一键启动
 pnpm docker:up
 
@@ -238,7 +284,9 @@ pnpm docker:logs
 访问地址：**`http://localhost:3000`**
 
 #### 💾 数据卷持久化说明
+
 Docker 编排配置中已对关键数据目录挂载了具名数据卷：
+
 - `sqlite-data` 挂载至 `/app/server/data`：保障 SQLite 数据库文件在容器重建时不丢失。
 - `uploads-data` 挂载至 `/app/uploads`：保障创作者上传的本地图床图片持久化保存。
 
@@ -255,11 +303,16 @@ pnpm build
 # 2. 启动生产单服务 (同端口 3000 同时托管 API 与 dist/ 静态前端)
 export NODE_ENV=production
 export API_PORT=3000
-export JWT_SECRET=your-super-strong-jwt-secret-key
+# 生成一次并妥善保存;重启时复用同一个值,避免已签发 token 失效
+export JWT_SECRET=$(openssl rand -hex 32)
+# 空库首次启动还需提供初始管理员 (已有数据库时可省略)
+export ADMIN_EMAIL=ops@example.com
+export ADMIN_PASSWORD='请替换为至少 8 位的强密码'
 pnpm start
 ```
 
 若使用 **PM2** 守护进程管理器：
+
 ```bash
 pm2 start server/index.js --name "creator-studio" --env production
 pm2 save
@@ -309,7 +362,7 @@ server {
 项目实施严苛的代码质量与自动化测试工程规范：
 
 ```bash
-# 执行后端 API 集成测试 (32 个用例覆盖登录鉴权、文章 CRUD、图床上传、Webhook、RBAC)
+# 执行后端 API 集成测试 (68 个用例覆盖登录鉴权、改密与 token 吊销、文章 CRUD/乐观锁、图床上传安全、Webhook、RBAC、状态机、审计与自动分发)
 pnpm test:server
 
 # 执行全量代码静态规范检查 (ESLint 9)
@@ -320,26 +373,32 @@ pnpm build
 ```
 
 当前测试运行结果：
-- `server/__tests__/api.test.js`：32 个 API 接口与状态机测试全部通过。
+
+- `server/__tests__/api.test.js`：68 个 API 接口、改密吊销、乐观锁冲突、上传校验、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
+- `server/__tests__/jwt-secret.test.js`：8 个 JWT 密钥解析与生产启动校验测试全部通过。
+- `server/__tests__/seed-policy.test.js`：12 个种子数据策略、管理员引导与生产初始化测试全部通过。
+- `server/__tests__/security.test.js`：10 个安全响应头、CORS 白名单与认证限流测试全部通过。
+- `server/__tests__/observability.test.js`：5 个健康检查、请求 ID 透传与 API 404 兜底测试全部通过。
 - `src/features/articles/utils/parse-markdown.test.ts`：5 个 Frontmatter 解析与容错测试全部通过。
 - `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
 - `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
 - `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
-- **全套 48 项测试用例全部 100% 通过，0 错误，0 警告。**
+- **全套 119 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
 
 ---
 
 ## 📂 项目工程目录全景
 
 ```text
-├── docs/                       # 架构设计与历史路线图文档
+├── docs/                       # 架构设计、生产边界与历史路线图文档
 │   ├── ARCHITECTURE.md         # 架构分层与设计规范
+│   ├── PRODUCTION.md           # 生产环境边界、备份与扩容说明
 │   └── ROADMAP.md              # 功能演进里程碑
 ├── docker/                     # 生产容器化配置 (Dockerfile & compose.yaml)
 ├── server/                     # 服务端核心代码 (分层架构)
 │   ├── index.js                # Express 入口 (单服务同端口托管 API 与前端)
 │   ├── db/                     # 数据持久化层 (SQLite & 种子数据)
-│   ├── services/               # 业务服务层 (分发引擎 & 定时发布 Worker)
+│   ├── services/               # 业务服务层 (分发引擎 & 定时发布 Worker & 状态机)
 │   ├── routes/                 # 业务 API 路由层 (REST 控制器)
 │   └── __tests__/              # 服务端集成测试
 ├── src/                        # 前端应用源码
@@ -374,6 +433,11 @@ pnpm build
   - [x] 渠道 Webhook 配置管理与即时连通性探针测试
   - [x] 细粒度 RBAC 团队权限体系 (Admin / Editor / Author) 状态机约束
   - [x] 数据看板 7/30/90 天周期切换、图例切换与周环比增长洞察
+- [x] **生产加固**：
+  - [x] 文章乐观锁与 409 冲突自动刷新
+  - [x] 敏感操作审计日志与管理员查询页
+  - [x] 就绪探针、X-Request-Id 结构化访问日志与优雅停机
+  - [x] 图床上传格式白名单、5 MB 限制与文件头魔数校验
 - [ ] **未来探索**：
   - [ ] GitHub Pages / 线上 Demo 一键预览站
   - [ ] 支持接入本地 Ollama / vLLM 私有大语言模型
