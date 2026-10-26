@@ -13,6 +13,9 @@ services:
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       TRUST_PROXY: ${TRUST_PROXY:-}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-}
+      REFRESH_RATE_LIMIT_MAX: ${REFRESH_RATE_LIMIT_MAX:-}
     volumes:
       - sqlite-data:/app/server/data
       - uploads-data:/app/uploads

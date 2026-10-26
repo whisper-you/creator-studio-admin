@@ -36,13 +36,14 @@ creator-studio-admin/
 │   │   ├── article-status.js     # 文章状态机与流转规则（与前端 statusFlow 对齐）
 │   │   ├── audit.js              # 敏感操作审计日志写入与分页查询
 │   │   ├── jwt-secret.js         # JWT 密钥解析与生产环境启动校验
+│   │   ├── session.js            # 短时 access token + HttpOnly refresh token 轮换/吊销
 │   │   ├── observability.js      # X-Request-Id、结构化访问日志与就绪检查
 │   │   ├── seed-policy.js        # 演示数据开关与生产管理员引导策略
 │   │   ├── security.js           # Helmet 安全头、CORS 白名单与认证端点限流
 │   │   ├── distribution.js       # 多平台 Webhook 分发与通道拟真引擎
 │   │   └── scheduler.js          # 定时发布自动调度引擎 (Worker)
 │   ├── routes/                   # RESTful API 控制器路由层
-│   │   ├── auth.js               # 登录/注册/JWT 签发/改密与 token 版本吊销/RBAC 角色流转
+│   │   ├── auth.js               # 登录/注册/刷新/登出/改密吊销/RBAC 角色流转
 │   │   ├── articles.js           # 文章全功能 CRUD/分页/筛选/批量操作/乐观锁
 │   │   ├── audit.js              # 审计日志查询（仅管理员）
 │   │   ├── channels.js           # 渠道绑定与 Webhook 连通性测试探针
@@ -77,7 +78,7 @@ creator-studio-admin/
 │   │   ├── errors/               # 403 / 404 / 500 错误兜底页
 │   │   └── settings/             # 个人配置与偏好设置
 │   ├── lib/                      # 全局底层基础设施
-│   │   ├── api.ts                # Axios 客户端封装（JWT 拦截与错误映射）
+│   │   ├── api.ts                # Axios 客户端封装（JWT 拦截、401 静默续期与错误映射）
 │   │   ├── utils.ts              # Tailwind 类名合并（cn）等底层通用工具
 │   │   ├── cookies.ts            # Cookie 存储操作
 │   │   └── handle-server-error.ts# 统一服务端错误弹窗处理

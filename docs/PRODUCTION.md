@@ -127,16 +127,19 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 
 **现状**
 
-- 登录签发 JWT，有效期 24 小时；`requireAuth` 每次请求从数据库实时读取角色。
-- 前端把 token 存在可被 JavaScript 读取的 Cookie 中，并在请求头里发送 `Authorization: Bearer`。
-- 支持自助修改密码：`POST /api/auth/change-password` 校验当前密码后更新哈希并递增 `users.token_version`。JWT 内携带 `ver` 声明，版本不匹配的旧 token 立即失效；改密接口会为当前会话返回新 token，因此本人无需重新登录，其他设备/标签页会被强制退出。
-- 服务端尚未提供刷新令牌、登出失效（单会话注销）与忘记密码重置；`/api/auth/me` 仅支持修改昵称与角色。
+- 登录签发短时 access token（JWT，默认 15 分钟，`ACCESS_TOKEN_TTL` 可调）；`requireAuth` 每次请求从数据库实时读取角色。
+- access token 存在可被 JavaScript 读取的 Cookie 中，并在请求头里发送 `Authorization: Bearer`。
+- refresh token 为随机 32 字节不透明串，只以 SHA-256 哈希存库（`refresh_tokens` 表），通过 `HttpOnly + SameSite=Lax + Path=/api/auth` 的 Cookie 下发，默认 30 天（`REFRESH_TOKEN_TTL_DAYS` 可调），生产环境强制 `Secure`。
+- 每次调用 `POST /api/auth/refresh` 都会轮换 refresh token；已轮换的旧 token 被再次使用视为泄露重放，会吊销该用户全部会话并写入 `auth.refresh_reuse` 审计。
+- `POST /api/auth/logout` 吊销当前 refresh token 并清除 Cookie；改密会吊销该用户全部 refresh token（同时递增 `token_version` 让存量 access token 失效），并为当前会话补发新 token。
+- 前端在请求返回 401 时自动单飞刷新并重放原请求；刷新失败才清理登录态并跳转登录页。页面刷新后若 access token 已过期，也会静默续期，无需用户重新登录。
+- 服务端尚未提供忘记密码重置、管理员强制下线与登录设备列表；`/api/auth/me` 仅支持修改昵称与角色。
 - 公开注册固定创建 `author` 用户。
-- 认证端点已限流：登录 30 次/15 分钟、注册 5 次/小时、改密 10 次/15 分钟，按客户端 IP 计数；单进程内存实现，重启清零。阈值可通过 `AUTH_RATE_LIMIT_*` / `REGISTER_RATE_LIMIT_*` / `CHANGE_PASSWORD_RATE_LIMIT_MAX` 调整。
+- 认证端点已限流：登录 30 次/15 分钟、注册 5 次/小时、改密 10 次/15 分钟、刷新 120 次/15 分钟，按客户端 IP 计数；单进程内存实现，重启清零。阈值可通过 `AUTH_RATE_LIMIT_*` / `REGISTER_RATE_LIMIT_*` / `CHANGE_PASSWORD_RATE_LIMIT_MAX` / `REFRESH_RATE_LIMIT_MAX` 调整。
 - CORS 默认仅同源：开发/测试放行本地 Vite（`localhost:5173`），生产不启用跨域；前后端分域部署时通过 `CORS_ORIGINS`（逗号分隔）显式放行。
 - 已启用 Helmet 安全响应头（CSP 放行 Google Fonts 与内联样式，未强制 `upgrade-insecure-requests`）。生产构建已在真实浏览器中验证登录、看板与设置页无 CSP 拦截。
 - 部署在反向代理后需设置 `TRUST_PROXY`（如 `1`），否则限流会把所有请求算到代理 IP 上；直连部署保持默认关闭，避免 `X-Forwarded-For` 被伪造。
-- 当前未启用 CSRF 防护。token 通过 `Authorization` 头传递而非浏览器自动携带的 Cookie，CSRF 风险较低，但若后续改为 Cookie 鉴权必须同步补 CSRF 防护。
+- 当前未额外启用 CSRF token。access token 通过 `Authorization` 头传递；唯一自动携带的凭据是 `SameSite=Lax` 的 refresh Cookie，跨站 POST 不会带上它，`refresh` / `logout` 因此不可被跨站请求伪造。若后续把 access token 也改成 Cookie 鉴权，必须同步补 CSRF 防护。
 - 角色切换接口默认在 `NODE_ENV=production` 下关闭，但可通过 `ALLOW_ROLE_SWITCH=true` 重新开启。
 
 **必须注意**
@@ -144,9 +147,11 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 1. **必须设置强随机 `JWT_SECRET`（至少 32 位）**。非生产环境未设置时会回退到内置开发密钥；生产环境缺失、使用示例占位值或长度不足时，服务会在启动阶段直接抛错拒绝运行。Docker 编排在未提供该变量时也会直接报错。
 2. **生产环境不要开启 `ALLOW_ROLE_SWITCH`**。该接口允许已登录用户把自己的角色改成 `admin`，仅用于演示。
 3. **演示数据默认只在非生产环境注入**。生产环境空库首次启动必须设置 `ADMIN_EMAIL` / `ADMIN_PASSWORD`（密码至少 8 位），否则服务会拒绝启动；不会创建演示文章、素材、评论或默认口令账号。渠道会写入基础定义，但默认全部为未连接状态。若显式设置 `SEED_DEMO_DATA=true`，会连同 `creator@studio.dev / creator123` 演示账号一起写入，仅限演示部署。
-4. token 存在 JS 可读 Cookie 中，一旦发生 XSS 即可被窃取；生产环境应通过严格的 CSP、依赖审计与输入转义降低风险，长期建议改为 HttpOnly + SameSite Cookie 或短时 access token + refresh token。
-5. 改密会吊销该账号的全部旧 token（`token_version` 递增），适合在密码泄露或人员变动时紧急处置；但当前没有单会话登出、令牌黑名单或管理员强制踢下线能力，未改密时 token 仍会在 24 小时内自然有效。若需要更细粒度控制，应引入 refresh token + 服务端会话表。
-6. 如果站点对公网开放，建议在最外层再增加 WAF 或 Nginx `limit_req` 作为纵深防御。内置限流是单进程内存计数，多副本部署时每个实例各自计数，需改用 Redis 等共享存储。
+4. access token 仍存在 JS 可读 Cookie 中，XSS 可在其 15 分钟有效期内窃取；生产环境应通过严格 CSP、依赖审计与输入转义降低风险。refresh token 已改为 HttpOnly，无法被脚本读取，且轮换 + 重放检测可限制泄露窗口。
+5. **生产环境必须启用 HTTPS**。refresh Cookie 在 `NODE_ENV=production` 下带 `Secure`，纯 HTTP 部署会导致浏览器不保存 Cookie，表现为登录后立刻掉线。
+6. 改密会吊销全部 refresh token 并递增 `token_version`，适合密码泄露或人员变动时紧急处置。目前没有管理员强制下线接口；如需要，可基于 `refresh_tokens` 表扩展「按用户撤销全部会话」。
+7. 前后端分域部署时，除设置 `CORS_ORIGINS` 外，还需保证浏览器允许携带凭据（服务端已开启 `credentials`，前端 axios 已设置 `withCredentials`），且 `Secure` Cookie 要求 HTTPS。
+8. 如果站点对公网开放，建议在最外层再增加 WAF 或 Nginx `limit_req` 作为纵深防御。内置限流是单进程内存计数，多副本部署时每个实例各自计数，需改用 Redis 等共享存储。
 
 ---
 
@@ -200,12 +205,13 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - [ ] `SEED_DEMO_DATA` 未在公网生产环境开启
 - [ ] 默认演示账号未被创建；若曾开启演示模式，已删除或改密
 - [ ] `server/data/` 与 `uploads/` 已挂载到持久化磁盘
-- [ ] 已配置 HTTPS，HTTP 自动跳转
+- [ ] 已配置 HTTPS，HTTP 自动跳转（生产 refresh Cookie 带 `Secure`，无 HTTPS 会导致登录后掉线）
 - [ ] Nginx `client_max_body_size` 与上传需求匹配（单图业务上限 5 MB）
 - [ ] 负载均衡/编排系统已接入 `/api/health/ready` 就绪探针
 - [ ] CORS 已按部署形态确认：同源部署保持为空，分域部署已设置 `CORS_ORIGINS` 白名单
 - [ ] 反向代理部署已设置 `TRUST_PROXY`，且层数与实际拓扑一致
-- [ ] 已按业务量评估认证限流阈值（默认登录 30 次/15 分钟）
+- [ ] 已按业务量评估认证限流阈值（默认登录 30 次/15 分钟、刷新 120 次/15 分钟）
+- [ ] 已确认会话有效期符合预期（默认 access 15 分钟、refresh 30 天）
 - [ ] 已配置进程守护与开机自启
 - [ ] 已配置数据库与图片目录的定时备份，并验证过恢复
 - [ ] 已配置磁盘与进程存活告警
@@ -257,7 +263,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 1. **数据库**：SQLite → PostgreSQL，引入版本化迁移与连接池。
 2. **文件**：本地 `uploads/` → 对象存储 + CDN。
 3. **调度与分发**：进程内定时器 → 独立 Worker + 队列（BullMQ / Redis / 云队列），支持重试、幂等与死信。
-4. **认证**：补充刷新令牌、单会话登出、忘记密码重置；多副本时将限流计数迁移到 Redis 等共享存储。
+4. **认证**：补充忘记密码重置、管理员强制下线与设备列表；多副本时将 refresh token 会话与限流计数迁移到共享存储（Redis/PostgreSQL）。
 5. **可观测性**：在现有请求日志基础上补充指标、错误追踪与告警，并将日志集中收集。
 6. **部署**：单容器 → 无状态多副本 + 托管数据库 + 对象存储，调度器单独部署。
 
