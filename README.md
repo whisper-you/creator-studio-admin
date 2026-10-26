@@ -221,15 +221,18 @@ pnpm server
 
 ### 方式一：Docker Compose 一键部署 (强烈推荐)
 
-项目已提供开箱即用的多阶段构建 [`Dockerfile`](./Dockerfile) 与 [`compose.yaml`](./compose.yaml)。构建阶段编译前端静态资源，运行时阶段采用极简 Node.js Alpine 容器，同时托管后端 API 与前端产物。
+项目已在 [`docker/`](./docker) 目录下提供多阶段构建镜像定义与容器编排文件。构建阶段编译前端静态资源，运行时阶段采用极简 Node.js Alpine 容器，同时托管后端 API 与前端产物。
 
 ```bash
-# 一键构建镜像并在后台启动容器
-docker compose up -d --build
+# 【方式 A】通过 npm scripts 一键启动
+pnpm docker:up
+
+# 【方式 B】直接使用 docker compose 指令
+docker compose -f docker/compose.yaml up -d --build
 
 # 查看运行状态与容器日志
-docker compose ps
-docker compose logs -f app
+docker compose -f docker/compose.yaml ps
+pnpm docker:logs
 ```
 
 访问地址：**`http://localhost:3000`**
@@ -332,8 +335,7 @@ pnpm build
 ├── docs/                       # 架构设计与历史路线图文档
 │   ├── ARCHITECTURE.md         # 架构分层与设计规范
 │   └── ROADMAP.md              # 功能演进里程碑
-├── compose.yaml                # Docker Compose 生产容器编排文件
-├── Dockerfile                  # 多阶段轻量化生产容器镜像构建
+├── docker/                     # 生产容器化配置 (Dockerfile & compose.yaml)
 ├── server/                     # 服务端核心代码 (分层架构)
 │   ├── index.js                # Express 入口 (单服务同端口托管 API 与前端)
 │   ├── db/                     # 数据持久化层 (SQLite & 种子数据)
