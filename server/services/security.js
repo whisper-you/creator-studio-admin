@@ -47,6 +47,10 @@ export function resolveRateLimits(env = process.env) {
       windowMs: positiveInt(env.AUTH_RATE_LIMIT_WINDOW_MS, 15 * MINUTE),
       limit: positiveInt(env.CHANGE_PASSWORD_RATE_LIMIT_MAX, 10),
     },
+    refresh: {
+      windowMs: positiveInt(env.AUTH_RATE_LIMIT_WINDOW_MS, 15 * MINUTE),
+      limit: positiveInt(env.REFRESH_RATE_LIMIT_MAX, 120),
+    },
   }
 }
 
@@ -67,6 +71,7 @@ export function createAuthLimiters(env = process.env) {
     loginLimiter: createLimiter(limits.login),
     registerLimiter: createLimiter(limits.register),
     changePasswordLimiter: createLimiter(limits.changePassword),
+    refreshLimiter: createLimiter(limits.refresh),
   }
 }
 

@@ -46,6 +46,8 @@ if (corsOrigins.length > 0) {
     cors({
       origin: (origin, callback) =>
         callback(null, !origin || corsOrigins.includes(origin)),
+      // HttpOnly refresh cookie 需要跨域携带凭据
+      credentials: true,
     })
   )
 }
@@ -53,11 +55,12 @@ if (corsOrigins.length > 0) {
 app.use(express.json({ limit: '25mb' }))
 app.use('/uploads', express.static(uploadsDir))
 
-const { loginLimiter, registerLimiter, changePasswordLimiter } =
+const { loginLimiter, registerLimiter, changePasswordLimiter, refreshLimiter } =
   createAuthLimiters()
 app.use('/api/auth/login', loginLimiter)
 app.use('/api/auth/register', registerLimiter)
 app.use('/api/auth/change-password', changePasswordLimiter)
+app.use('/api/auth/refresh', refreshLimiter)
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 // 就绪检查:数据库可查询 + 上传目录可写;失败返回 503 供编排系统摘流

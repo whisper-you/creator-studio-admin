@@ -73,6 +73,7 @@ describe('安全策略解析', () => {
       windowMs: 15 * 60_000,
       limit: 10,
     })
+    expect(defaults.refresh).toEqual({ windowMs: 15 * 60_000, limit: 120 })
 
     const overridden = resolveRateLimits({
       AUTH_RATE_LIMIT_MAX: '7',

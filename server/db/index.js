@@ -101,6 +101,17 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_audit_logs_created
     ON audit_logs (created_at DESC);
+  CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    revoked_at TEXT,
+    revoked_reason TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
+    ON refresh_tokens (user_id);
 `)
 
 // 平滑数据库迁移:为旧库补充新列
@@ -134,6 +145,10 @@ try {
 
 try {
   db.exec('ALTER TABLE articles ADD COLUMN version INTEGER NOT NULL DEFAULT 1')
+} catch (_) {}
+
+try {
+  db.exec('ALTER TABLE refresh_tokens ADD COLUMN revoked_reason TEXT')
 } catch (_) {}
 
 export function articleRowToJson(row) {

@@ -2,6 +2,7 @@ import { db } from '../db/index.js'
 
 const ACTIONS = [
   'auth.change_password',
+  'auth.refresh_reuse',
   'user.role_change',
   'article.status_change',
   'article.bulk_status_change',

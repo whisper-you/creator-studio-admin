@@ -12,6 +12,7 @@ process.env.JWT_SECRET = 'test-secret'
 process.env.AUTH_RATE_LIMIT_MAX = '10000'
 process.env.REGISTER_RATE_LIMIT_MAX = '10000'
 process.env.CHANGE_PASSWORD_RATE_LIMIT_MAX = '10000'
+process.env.REFRESH_RATE_LIMIT_MAX = '10000'
 
 const { app, checkAndPublishScheduledArticles } = await import('../index.js')
 
@@ -57,6 +58,19 @@ const authed = (token) => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${token}`,
 })
+
+const refreshCookieOf = (res) => {
+  const raw = res.headers
+    .getSetCookie?.()
+    .find?.((c) => c.startsWith('cs_refresh='))
+  return raw ? raw.split(';')[0] : null
+}
+
+const refreshWith = (cookie) =>
+  fetch(`${baseUrl}/api/auth/refresh`, {
+    method: 'POST',
+    headers: cookie ? { Cookie: cookie } : {},
+  })
 
 describe('POST /api/auth/login', () => {
   it('错误密码返回 401', async () => {
@@ -911,6 +925,128 @@ describe('密码修改与 token 版本吊销', () => {
     const res = await login(email, newPassword)
     expect(res.status).toBe(200)
     expect((await res.json()).user.email).toBe(email)
+  })
+})
+
+describe('会话续期与登出', () => {
+  const email = 'session-user@test.dev'
+  const password = 'password123'
+  const newPassword = 'session-new-pass1'
+
+  const sessionOf = async (loginEmail = email, loginPassword = password) => {
+    const res = await login(loginEmail, loginPassword)
+    const body = await res.json()
+    return { token: body.accessToken, cookie: refreshCookieOf(res), res }
+  }
+
+  beforeAll(async () => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name: '会话测试' }),
+    })
+    expect(res.status).toBe(201)
+  })
+
+  it('登录下发 HttpOnly 且限定路径的 refresh cookie', async () => {
+    const res = await login()
+    expect(res.status).toBe(200)
+    const raw = res.headers
+      .getSetCookie()
+      .find((c) => c.startsWith('cs_refresh='))
+    expect(raw).toBeTruthy()
+    expect(raw).toMatch(/HttpOnly/i)
+    expect(raw).toMatch(/Path=\/api\/auth/i)
+    expect(raw).toMatch(/SameSite=Lax/i)
+  })
+
+  it('未携带 refresh cookie 时返回 401', async () => {
+    const res = await refreshWith(null)
+    expect(res.status).toBe(401)
+  })
+
+  it('刷新返回新 access token,并轮换 refresh token', async () => {
+    const { cookie: first } = await sessionOf()
+    expect(first).toBeTruthy()
+
+    const res = await refreshWith(first)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.accessToken).toBeTruthy()
+    expect(body.user.email).toBe(email)
+
+    const second = refreshCookieOf(res)
+    expect(second).toBeTruthy()
+    expect(second).not.toBe(first)
+    // 轮换后的新 cookie 可继续刷新
+    expect((await refreshWith(second)).status).toBe(200)
+  })
+
+  it('重放已轮换的 token 会吊销该用户全部会话并写入审计', async () => {
+    const { cookie: first } = await sessionOf()
+    const rotated = await refreshWith(first)
+    expect(rotated.status).toBe(200)
+    const second = refreshCookieOf(rotated)
+
+    expect((await refreshWith(first)).status).toBe(401)
+    // 复用检测:同用户刚换出的新 token 也一并失效
+    expect((await refreshWith(second)).status).toBe(401)
+
+    const admin = (await (await login()).json()).accessToken
+    const logs = await fetch(
+      `${baseUrl}/api/audit-logs?action=auth.refresh_reuse`,
+      { headers: authed(admin) }
+    )
+    const body = await logs.json()
+    expect(body.data.length).toBeGreaterThan(0)
+    expect(body.data[0].entityType).toBe('user')
+  })
+
+  it('登出吊销 refresh token 并清除 Cookie', async () => {
+    const { cookie } = await sessionOf()
+    const res = await fetch(`${baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { Cookie: cookie },
+    })
+    expect(res.status).toBe(204)
+
+    const cleared = res.headers
+      .getSetCookie()
+      .find((c) => c.startsWith('cs_refresh='))
+    expect(cleared).toMatch(/cs_refresh=;/)
+    expect((await refreshWith(cookie)).status).toBe(401)
+  })
+
+  it('改密吊销其他设备的 refresh token,当前会话续期正常', async () => {
+    const { token, cookie: cookieA } = await sessionOf()
+    const { cookie: cookieB } = await sessionOf()
+
+    const res = await fetch(`${baseUrl}/api/auth/change-password`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        currentPassword: password,
+        newPassword,
+      }),
+    })
+    expect(res.status).toBe(200)
+    const currentCookie = refreshCookieOf(res)
+
+    expect((await refreshWith(cookieA)).status).toBe(401)
+    expect((await refreshWith(cookieB)).status).toBe(401)
+    expect((await refreshWith(currentCookie)).status).toBe(200)
+
+    // 恢复密码,避免影响后续用例
+    const refreshed = await refreshWith(currentCookie)
+    const freshToken = (await refreshed.json()).accessToken
+    await fetch(`${baseUrl}/api/auth/change-password`, {
+      method: 'POST',
+      headers: authed(freshToken),
+      body: JSON.stringify({
+        currentPassword: newPassword,
+        newPassword: password,
+      }),
+    })
   })
 })
 

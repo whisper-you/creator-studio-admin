@@ -5,10 +5,19 @@ import jwt from 'jsonwebtoken'
 import { db } from '../db/index.js'
 import { recordAudit } from '../services/audit.js'
 import { resolveJwtSecret } from '../services/jwt-secret.js'
+import {
+  clearRefreshCookie,
+  consumeRefreshToken,
+  createRefreshToken,
+  readRefreshCookie,
+  revokeAllRefreshTokens,
+  revokeRefreshToken,
+  setRefreshCookie,
+  signAccessToken,
+} from '../services/session.js'
 
 // 生产环境缺少强随机密钥时,在模块加载阶段直接抛错终止启动
 const JWT_SECRET = resolveJwtSecret()
-const TOKEN_TTL = '24h'
 const USER_ROLES = ['admin', 'editor', 'author']
 
 const loginSchema = z.object({
@@ -23,12 +32,11 @@ function isRoleSwitchAllowed() {
   return process.env.NODE_ENV !== 'production'
 }
 
-function signToken(user) {
-  return jwt.sign(
-    { sub: String(user.id), email: user.email, ver: user.token_version ?? 1 },
-    JWT_SECRET,
-    { expiresIn: TOKEN_TTL }
-  )
+/** 签发短时 access token,并把 refresh token 写入 HttpOnly Cookie */
+function issueSession(res, user) {
+  const refresh = createRefreshToken(user.id)
+  setRefreshCookie(res, refresh.token, refresh.expiresAt)
+  return { accessToken: signAccessToken(user), user: userToJson(user) }
 }
 
 const userToJson = (u) => ({
@@ -114,10 +122,7 @@ authRouter.post('/register', (req, res) => {
   const user = db
     .prepare('SELECT * FROM users WHERE id = ?')
     .get(result.lastInsertRowid)
-  res.status(201).json({
-    accessToken: signToken(user),
-    user: userToJson(user),
-  })
+  res.status(201).json(issueSession(res, user))
 })
 
 authRouter.post('/login', (req, res) => {
@@ -131,10 +136,53 @@ authRouter.post('/login', (req, res) => {
   if (!user || !compareSync(parsed.data.password, user.password_hash)) {
     return res.status(401).json({ message: '邮箱或密码错误' })
   }
+  res.json(issueSession(res, user))
+})
+
+/**
+ * 静默续期:用 HttpOnly Cookie 里的 refresh token 换新的 access token。
+ * 每次刷新都会轮换 refresh token;已撤销 token 被重放时吊销该用户全部会话。
+ */
+authRouter.post('/refresh', (req, res) => {
+  const raw = readRefreshCookie(req)
+  if (!raw) {
+    return res.status(401).json({ message: '登录已过期,请重新登录' })
+  }
+
+  const result = consumeRefreshToken(raw)
+  if (result.status === 'reused') {
+    recordAudit(
+      { user: { id: result.userId } },
+      {
+        action: 'auth.refresh_reuse',
+        entityType: 'user',
+        entityId: result.userId,
+      }
+    )
+  }
+  if (result.status !== 'ok') {
+    clearRefreshCookie(res)
+    return res.status(401).json({
+      message:
+        result.status === 'reused'
+          ? '登录状态已失效,请重新登录'
+          : '登录已过期,请重新登录',
+    })
+  }
+
+  setRefreshCookie(res, result.token, result.expiresAt)
   res.json({
-    accessToken: signToken(user),
-    user: userToJson(user),
+    accessToken: signAccessToken(result.user),
+    user: userToJson(result.user),
   })
+})
+
+/** 登出:吊销当前 refresh token 并清除 Cookie(access token 到期前仍有效,故不要求鉴权) */
+authRouter.post('/logout', (req, res) => {
+  const raw = readRefreshCookie(req)
+  if (raw) revokeRefreshToken(raw)
+  clearRefreshCookie(res)
+  res.status(204).end()
 })
 
 authRouter.get('/me', requireAuth, (req, res) => {
@@ -219,6 +267,8 @@ authRouter.post('/change-password', requireAuth, (req, res) => {
   db.prepare(
     'UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?'
   ).run(hashSync(newPassword, 10), req.userId)
+  // 改密后其他设备的 refresh token 一并失效,再为当前会话补发
+  revokeAllRefreshTokens(req.userId)
 
   recordAudit(req, {
     action: 'auth.change_password',
@@ -227,5 +277,5 @@ authRouter.post('/change-password', requireAuth, (req, res) => {
   })
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId)
-  res.json({ accessToken: signToken(user), user: userToJson(user) })
+  res.json(issueSession(res, user))
 })
