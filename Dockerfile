@@ -20,7 +20,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
-# SQLite 数据落在这个目录,部署时挂 volume 持久化
-VOLUME /app/server/data
+# SQLite 数据与图床上传图片落在这两个目录,部署时挂 volume 持久化
+VOLUME ["/app/server/data", "/app/uploads"]
 EXPOSE 3000
 CMD ["node", "server/index.js"]
