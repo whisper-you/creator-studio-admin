@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently -k -n web,api -c blue,green \"pnpm dev\" \"pnpm run server\"",
-    "server": "node --watch --env-file-if-exists=.env server/index.js",
-    "start": "node --env-file-if-exists=.env server/index.js",
+    "server": "node --watch server/index.js",
+    "start": "node server/index.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
