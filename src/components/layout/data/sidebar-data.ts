@@ -20,6 +20,7 @@ import {
   MessagesSquare,
   ScrollText,
   ShieldCheck,
+  Users,
 } from 'lucide-react'
 import { Logo } from '@/assets/logo'
 import { type SidebarData } from '../types'
@@ -70,6 +71,12 @@ export const sidebarData: SidebarData = {
           title: '素材库',
           url: '/materials',
           icon: FolderOpen,
+        },
+        {
+          title: '用户管理',
+          url: '/users',
+          icon: Users,
+          roles: ['admin'],
         },
         {
           title: '操作日志',

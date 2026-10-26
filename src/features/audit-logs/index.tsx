@@ -42,6 +42,8 @@ const actionLabels: Record<string, string> = {
   'auth.change_password': '修改密码',
   'auth.refresh_reuse': '会话重放拦截',
   'user.role_change': '角色变更',
+  'user.reset_password': '重置用户密码',
+  'user.force_logout': '强制下线用户',
   'article.status_change': '文章状态变更',
   'article.bulk_status_change': '批量状态变更',
   'article.delete': '删除文章',

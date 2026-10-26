@@ -294,6 +294,46 @@ export const auditApi = {
   },
 }
 
+const userListItemSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string(),
+  role: roleSchema,
+  createdAt: z.string(),
+  activeSessions: z.number(),
+})
+
+const userListSchema = z.object({
+  data: z.array(userListItemSchema),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
+})
+
+export type UserListItem = z.infer<typeof userListItemSchema>
+
+export const usersApi = {
+  async list(params: { page?: number; pageSize?: number; q?: string } = {}) {
+    return userListSchema.parse((await api.get('/users', { params })).data)
+  },
+  /** 重置后目标用户全部会话立即失效 */
+  async resetPassword(id: string, newPassword: string) {
+    return (
+      await api.post<{ ok: boolean; revokedSessions: number }>(
+        `/users/${id}/reset-password`,
+        { newPassword }
+      )
+    ).data
+  },
+  async forceLogout(id: string) {
+    return (
+      await api.post<{ ok: boolean; revokedSessions: number }>(
+        `/users/${id}/force-logout`
+      )
+    ).data
+  },
+}
+
 const commentListSchema = z.object({
   data: z.array(
     z.object({
