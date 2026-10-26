@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { db } from '../db.js'
+import { db } from '../db/index.js'
 import { requireAuth } from './auth.js'
 
 export const commentsRouter = Router()

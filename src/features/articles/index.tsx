@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import { parseMarkdownFile } from '@/lib/parse-markdown'
+import { parseMarkdownFile } from './utils/parse-markdown'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'

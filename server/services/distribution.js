@@ -1,4 +1,4 @@
-import { db } from './db.js'
+import { db } from '../db/index.js'
 
 /**
  * 将文章分发至指定或已绑定的发布渠道 (Webhook 推送 / 模拟通道)

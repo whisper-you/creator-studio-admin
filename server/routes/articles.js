@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { db, articleRowToJson, withTransaction } from '../db.js'
+import { db, articleRowToJson, withTransaction } from '../db/index.js'
 import { requireAuth } from './auth.js'
 
 export const articlesRouter = Router()

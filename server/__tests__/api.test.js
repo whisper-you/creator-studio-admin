@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'cs-api-test-'))
 process.env.JWT_SECRET = 'test-secret'
 
-const { app, checkAndPublishScheduledArticles } = await import('./index.js')
+const { app, checkAndPublishScheduledArticles } = await import('../index.js')
 
 let baseUrl
 let server
@@ -21,9 +21,24 @@ beforeAll(async () => {
   baseUrl = `http://127.0.0.1:${server.address().port}`
 })
 
-afterAll(
-  () => new Promise((resolve) => server.close(() => resolve()))
-)
+afterAll(async () => {
+  // 自动清理测试上传生成的测试图片
+  const { readdirSync, unlinkSync, existsSync } = await import('node:fs')
+  const uploadsDir = join(process.cwd(), 'uploads')
+  if (existsSync(uploadsDir)) {
+    const files = readdirSync(uploadsDir)
+    for (const f of files) {
+      if (f.startsWith('test-diagram-')) {
+        try {
+          unlinkSync(join(uploadsDir, f))
+        } catch {
+          // 忽略并发或已被删除错误
+        }
+      }
+    }
+  }
+  await new Promise((resolve) => server.close(() => resolve()))
+})
 
 const login = async (email = 'creator@studio.dev', password = 'creator123') => {
   const res = await fetch(`${baseUrl}/api/auth/login`, {

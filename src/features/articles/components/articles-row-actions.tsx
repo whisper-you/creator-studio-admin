@@ -4,8 +4,8 @@ import { Download, Printer, Send, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { distributionApi } from '@/lib/api'
-import { copyFormattedMarkdown, type FormatterTheme } from '@/lib/wechat-formatter'
-import { exportArticleAsMarkdown, printArticle } from '@/lib/export-article'
+import { copyFormattedMarkdown, type FormatterTheme } from '../utils/wechat-formatter'
+import { exportArticleAsMarkdown, printArticle } from '../utils/export-article'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,

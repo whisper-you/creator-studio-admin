@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { db } from '../db.js'
+import { db } from '../db/index.js'
 import { requireAuth } from './auth.js'
 
 export const statsRouter = Router()

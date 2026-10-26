@@ -14,7 +14,7 @@ import {
   startScheduler,
   stopScheduler,
   checkAndPublishScheduledArticles,
-} from './scheduler.js'
+} from './services/scheduler.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.API_PORT) || 5180

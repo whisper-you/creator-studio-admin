@@ -2,7 +2,7 @@ import { Router } from 'express'
 import jwt from 'jsonwebtoken'
 import { compareSync, hashSync } from 'bcryptjs'
 import { z } from 'zod'
-import { db } from '../db.js'
+import { db } from '../db/index.js'
 
 const JWT_SECRET = process.env.JWT_SECRET ?? 'creator-studio-dev-secret'
 const TOKEN_TTL = '24h'

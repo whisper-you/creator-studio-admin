@@ -13,9 +13,9 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
 import { materialsApi } from '@/lib/api'
-import { downloadFile } from '@/lib/export-article'
 import { cn } from '@/lib/utils'
-import { copyFormattedMarkdown, type FormatterTheme } from '@/lib/wechat-formatter'
+import { downloadFile } from '../utils/export-article'
+import { copyFormattedMarkdown, type FormatterTheme } from '../utils/wechat-formatter'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,

@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { db } from '../db.js'
+import { db } from '../db/index.js'
 import { requireAuth } from './auth.js'
-import { testWebhook } from '../distribution.js'
+import { testWebhook } from '../services/distribution.js'
 
 export const channelsRouter = Router()
 channelsRouter.use(requireAuth)

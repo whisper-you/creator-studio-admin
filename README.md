@@ -317,11 +317,11 @@ pnpm build
 ```
 
 当前测试运行结果：
-- `server/api.test.js`：32 个 API 接口与状态机测试全部通过。
-- `src/lib/parse-markdown.test.ts`：5 个 Frontmatter 解析与容错测试全部通过。
-- `src/lib/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
-- `src/lib/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
-- `src/lib/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
+- `server/__tests__/api.test.js`：32 个 API 接口与状态机测试全部通过。
+- `src/features/articles/utils/parse-markdown.test.ts`：5 个 Frontmatter 解析与容错测试全部通过。
+- `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
+- `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
+- `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
 - **全套 48 项测试用例全部 100% 通过，0 错误，0 警告。**
 
 ---
@@ -329,36 +329,27 @@ pnpm build
 ## 📂 项目工程目录全景
 
 ```text
-├── .github/workflows/          # CI/CD 持续集成流水线 (Lint -> Build -> Test)
+├── docs/                       # 架构设计与历史路线图文档
+│   ├── ARCHITECTURE.md         # 架构分层与设计规范
+│   └── ROADMAP.md              # 功能演进里程碑
 ├── compose.yaml                # Docker Compose 生产容器编排文件
 ├── Dockerfile                  # 多阶段轻量化生产容器镜像构建
-├── server/                     # 服务端核心代码
+├── server/                     # 服务端核心代码 (分层架构)
 │   ├── index.js                # Express 入口 (单服务同端口托管 API 与前端)
-│   ├── db.js                   # 原生 node:sqlite 数据库建模与迁移
-│   ├── scheduler.js            # 定时发布自动调度引擎
-│   ├── distribution.js         # Webhook 外部广播与模拟分发引擎
-│   └── routes/                 # 业务 API 路由层
-│       ├── auth.js             # 用户认证与 RBAC 角色流转
-│       ├── articles.js         # 文章 CRUD、分页筛选与批量操作
-│       ├── channels.js         # 渠道管理与连通性探针测试
-│       ├── materials.js        # 本地图床素材上传与列表
-│       ├── distribution.js     # 渠道分发日志与手动触发
-│       ├── comments.js         # 读者留言审核
-│       └── stats.js            # 数据看板统计与趋势走势
+│   ├── db/                     # 数据持久化层 (SQLite & 种子数据)
+│   ├── services/               # 业务服务层 (分发引擎 & 定时发布 Worker)
+│   ├── routes/                 # 业务 API 路由层 (REST 控制器)
+│   └── __tests__/              # 服务端集成测试
 ├── src/                        # 前端应用源码
-│   ├── features/               # 核心业务模块
-│   │   ├── articles/           # 文章管理 (表格、抽屉、导入弹窗、Markdown 编辑器)
+│   ├── features/               # 业务领域切片 (DDD 架构)
+│   │   ├── articles/           # 文章管理 (含专属 utils: AI 助手/排版/导出/解析)
 │   │   ├── schedule/           # 拖拽排期日历与最佳时段
 │   │   ├── channels/           # 渠道绑定与 Webhook 配置弹窗
 │   │   ├── materials/          # 素材库与图片预览
-│   │   └── dashboard/          # 综合数据看板 (趋势图、环比卡片、漏斗)
-│   ├── lib/                    # 纯函数工具类
-│   │   ├── api.ts              # Axios 客户端 (JWT 拦截 + Zod 校验)
-│   │   ├── ai-assistant.ts     # 本地启发式标题/摘要/标签算法引擎
-│   │   ├── wechat-formatter.ts # 微信公众号与知乎内联排版转换器
-│   │   ├── parse-markdown.ts   # Frontmatter YAML 健壮解析器
-│   │   └── export-article.ts   # Markdown / CSV / 打印 PDF 导出器
-│   └── stores/                 # Zustand 状态持久化与服务端同步 Store
+│   │   ├── dashboard/          # 综合数据看板 (趋势图、环比卡片、漏斗)
+│   │   └── comments/           # 读者评论审核流
+│   ├── lib/                    # 全局底层基础设施 (API 客户端、通用 utils、Cookies)
+│   └── stores/                 # 全局跨模块状态 Store
 └── uploads/                    # 本地自托管图床文件上传目录
 ```
 

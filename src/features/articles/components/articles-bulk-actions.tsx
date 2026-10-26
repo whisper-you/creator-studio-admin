@@ -1,8 +1,8 @@
 import { type Table } from '@tanstack/react-table'
 import { CircleArrowUp, Download, FileSpreadsheet, FileText, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { downloadCsv } from '@/lib/download-csv'
-import { exportArticlesAsMarkdown } from '@/lib/export-article'
+import { downloadCsv } from '../utils/download-csv'
+import { exportArticlesAsMarkdown } from '../utils/export-article'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,

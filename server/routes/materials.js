@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { db } from '../db.js'
+import { db } from '../db/index.js'
 import { requireAuth } from './auth.js'
 
 export const materialsRouter = Router()

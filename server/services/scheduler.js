@@ -1,4 +1,4 @@
-import { db, withTransaction, articleRowToJson } from './db.js'
+import { db, withTransaction, articleRowToJson } from '../db/index.js'
 import { dispatchArticle } from './distribution.js'
 
 let timer = null

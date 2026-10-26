@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { db, articleRowToJson } from '../db.js'
+import { db, articleRowToJson } from '../db/index.js'
 import { requireAuth } from './auth.js'
-import { dispatchArticle, getDistributionLogs } from '../distribution.js'
+import { dispatchArticle, getDistributionLogs } from '../services/distribution.js'
 
 export const distributionRouter = Router()
 distributionRouter.use(requireAuth)

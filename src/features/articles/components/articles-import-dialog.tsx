@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { parseMarkdownFile, type ParsedMarkdownFile } from '@/lib/parse-markdown'
+import { parseMarkdownFile, type ParsedMarkdownFile } from '../utils/parse-markdown'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'

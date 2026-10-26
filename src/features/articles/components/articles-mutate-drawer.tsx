@@ -11,7 +11,7 @@ import {
   generateSmartSummary,
   generateSmartTags,
   type TitleCandidate,
-} from '@/lib/ai-assistant'
+} from '../utils/ai-assistant'
 import { bestPublishHour } from '@/lib/best-publish-time'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
