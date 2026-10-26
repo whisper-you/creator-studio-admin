@@ -1,4 +1,5 @@
 import { type LinkProps } from '@tanstack/react-router'
+import { type UserRole } from '@/stores/auth-store'
 
 type User = {
   name: string
@@ -16,6 +17,8 @@ type BaseNavItem = {
   title: string
   badge?: string
   icon?: React.ElementType
+  /** 省略表示所有角色可见;设置后仅列出的角色可见 */
+  roles?: UserRole[]
 }
 
 type NavLink = BaseNavItem & {

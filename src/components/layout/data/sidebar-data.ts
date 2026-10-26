@@ -18,6 +18,7 @@ import {
   CalendarDays,
   FolderOpen,
   MessagesSquare,
+  ScrollText,
   ShieldCheck,
 } from 'lucide-react'
 import { Logo } from '@/assets/logo'
@@ -69,6 +70,12 @@ export const sidebarData: SidebarData = {
           title: '素材库',
           url: '/materials',
           icon: FolderOpen,
+        },
+        {
+          title: '操作日志',
+          url: '/audit-logs',
+          icon: ScrollText,
+          roles: ['admin'],
         },
       ],
     },
