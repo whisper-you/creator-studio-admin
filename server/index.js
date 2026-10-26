@@ -12,6 +12,7 @@ import { commentsRouter } from './routes/comments.js'
 import { distributionRouter } from './routes/distribution.js'
 import { materialsRouter } from './routes/materials.js'
 import { statsRouter } from './routes/stats.js'
+import { usersRouter } from './routes/users.js'
 import { checkReadiness, requestContext } from './services/observability.js'
 import {
   startScheduler,
@@ -76,6 +77,7 @@ app.use('/api/stats', statsRouter)
 app.use('/api/comments', commentsRouter)
 app.use('/api/distribution', distributionRouter)
 app.use('/api/audit-logs', auditRouter)
+app.use('/api/users', usersRouter)
 
 // 未匹配的 /api 路由统一返回 JSON,避免落到前端 SPA fallback
 app.use('/api', (_req, res) => res.status(404).json({ message: '接口不存在' }))

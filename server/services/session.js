@@ -98,10 +98,12 @@ export function revokeRefreshToken(rawToken, reason = 'logout') {
 }
 
 export function revokeAllRefreshTokens(userId, reason = 'password_change') {
-  db.prepare(
-    `UPDATE refresh_tokens SET revoked_at = ?, revoked_reason = ?
-     WHERE user_id = ? AND revoked_at IS NULL`
-  ).run(new Date().toISOString(), reason, userId)
+  return db
+    .prepare(
+      `UPDATE refresh_tokens SET revoked_at = ?, revoked_reason = ?
+       WHERE user_id = ? AND revoked_at IS NULL`
+    )
+    .run(new Date().toISOString(), reason, userId).changes
 }
 
 export function readRefreshCookie(req) {

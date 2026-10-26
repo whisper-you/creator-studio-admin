@@ -4,6 +4,8 @@ const ACTIONS = [
   'auth.change_password',
   'auth.refresh_reuse',
   'user.role_change',
+  'user.reset_password',
+  'user.force_logout',
   'article.status_change',
   'article.bulk_status_change',
   'article.delete',
