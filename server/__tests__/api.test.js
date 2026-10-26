@@ -283,7 +283,7 @@ describe('文章 CRUD 全流程', () => {
     expect(res.status).toBe(400)
   })
 
-  it('POST /:id/view 阅读上报 +1', async () => {
+  it('POST /:id/view 同一用户每天只计一次', async () => {
     await fetch(`${baseUrl}/api/articles`, {
       method: 'POST',
       headers: authed(token),
@@ -297,12 +297,18 @@ describe('文章 CRUD 全流程', () => {
         views: 10,
       }),
     })
-    const res = await fetch(`${baseUrl}/api/articles/ART-901/view`, {
+    const first = await fetch(`${baseUrl}/api/articles/ART-901/view`, {
       method: 'POST',
       headers: authed(token),
     })
-    const body = await res.json()
-    expect(body.views).toBe(11)
+    expect((await first.json()).views).toBe(11)
+
+    const repeated = await fetch(`${baseUrl}/api/articles/ART-901/view`, {
+      method: 'POST',
+      headers: authed(token),
+    })
+    expect((await repeated.json()).views).toBe(11)
+
     await fetch(`${baseUrl}/api/articles/bulk-delete`, {
       method: 'POST',
       headers: authed(token),

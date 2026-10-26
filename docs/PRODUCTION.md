@@ -168,10 +168,10 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 
 - 前端采用乐观更新，写请求失败时整体回滚。
 - 文章更新已启用 `version` 乐观锁：客户端 PATCH 时可携带读取时的版本号，版本不匹配返回 `409` 与 `currentVersion`，写入成功后版本自增；批量更新提供 `versions` 映射，任一版本过期则整批回滚。前端遇到 `409` 会回滚本地改动并重新拉取服务端最新数据。
-- 阅读上报 `POST /api/articles/:id/view` 只递增 `views`，不改变版本号。
+- 阅读上报 `POST /api/articles/:id/view` 只递增 `views`，不改变版本号；同一用户对同一篇文章每天只计一次（`article_views` 去重表），重复调用不会继续累加。
 - 文章接口设有字段级上限：标题 200 字符、摘要 600 字符、正文 20 万字符、标签 20 个（每个 30 字符）、文章 ID 64 字符；批量创建/更新/删除单次最多 100 条。批量路由逐条同步查询与写入，限制条数可避免超大数组长时间占用事件循环。
 - 文章状态流转已由服务端状态机强制校验：状态只能沿 `draft → in_review → scheduled → published → archived → draft` 流转，排期可从任意状态进入 `scheduled`；非法流转返回 `409`，批量更新中任意一条非法则整批拒绝。
-- 角色与归属由服务端校验：`author` 只能维护自己的文章且只能写 `draft` / `in_review`；`editor` 可编辑他人文章但只能删除自己的；`admin` 不受限。`views` / `likes` 属于上报数据，作者不能创建时写入非零值或在 PATCH/批量更新中改写，`admin` / `editor` 可修正；`POST /api/articles/:id/view` 仍对已登录用户开放，每次调用 +1。
+- 角色与归属由服务端校验：`author` 只能维护自己的文章且只能写 `draft` / `in_review`；`editor` 可编辑他人文章但只能删除自己的；`admin` 不受限。`views` / `likes` 属于上报数据，作者不能创建时写入非零值或在 PATCH/批量更新中改写，`admin` / `editor` 可修正；`POST /api/articles/:id/view` 仍对已登录用户开放，首次上报 +1。
 - 敏感操作写入 `audit_logs` 表：改密、角色变更、文章状态变更/删除（含批量）、渠道配置更新、手动分发。管理员可通过 `GET /api/audit-logs` 分页查询并过滤；前端「操作日志」页面仅管理员可见。审计写入失败只告警，不阻断主流程。
 
 **影响**
@@ -193,7 +193,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - `GET /api/health` 为存活探针，只返回 `{ ok: true }`。
 - `GET /api/health/ready` 为就绪探针，检查数据库可查询与上传目录可写，失败返回 `503`；Dockerfile 已配置 `HEALTHCHECK`。
 - 每个请求都会生成或透传 `X-Request-Id`，响应结束后输出一行 JSON 访问日志（方法、路径、状态码、耗时、用户 ID、请求 ID），便于与网关日志串联。测试环境自动静默。
-- 审计与分发日志按天清理：调度器启动时与每 24 小时执行一次，默认保留审计 180 天、分发 90 天，可通过 `AUDIT_LOG_RETENTION_DAYS` / `DISTRIBUTION_LOG_RETENTION_DAYS` 调整，设为 `0` 表示永久保留。审计、评论、分发、文章筛选排序与 refresh token 过期清理均有对应索引。
+- 审计与分发日志按天清理：调度器启动时与每 24 小时执行一次，默认保留审计 180 天、分发 90 天、阅读去重记录 90 天，可通过 `AUDIT_LOG_RETENTION_DAYS` / `DISTRIBUTION_LOG_RETENTION_DAYS` / `ARTICLE_VIEW_RETENTION_DAYS` 调整，设为 `0` 表示永久保留。审计、评论、分发、文章筛选排序与 refresh token 过期清理均有对应索引。
 - 收到 `SIGTERM` / `SIGINT` 时执行优雅停机：停止调度器 → 停止接收新连接 → 关闭 SQLite；超过 10 秒强制退出。
 - 仍然没有指标、链路追踪、错误聚合或告警。
 

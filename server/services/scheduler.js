@@ -7,17 +7,17 @@ let retentionTimer = null
 
 const RETENTION_SWEEP_MS = 24 * 60 * 60 * 1000
 
-/** 每天清理一次过期审计/分发日志,避免日志表无限增长 */
+/** 每天清理一次过期审计/分发日志与阅读去重记录,避免日志表无限增长 */
 function runRetentionSweep() {
   try {
-    const { audit, distribution } = pruneOldLogs()
-    if (audit || distribution) {
+    const { audit, distribution, views } = pruneOldLogs()
+    if (audit || distribution || views) {
       console.log(
-        `[retention] 清理历史日志: 审计 ${audit} 条, 分发 ${distribution} 条`
+        `[retention] 清理历史数据: 审计 ${audit} 条, 分发 ${distribution} 条, 阅读去重 ${views} 条`
       )
     }
   } catch (err) {
-    console.error('[retention] 清理历史日志失败:', err)
+    console.error('[retention] 清理历史数据失败:', err)
   }
 }
 

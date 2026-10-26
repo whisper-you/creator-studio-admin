@@ -77,6 +77,14 @@ db.exec(`
     status     TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS article_views (
+    article_id TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    view_date  TEXT NOT NULL,
+    PRIMARY KEY (article_id, user_id, view_date)
+  );
+  CREATE INDEX IF NOT EXISTS idx_article_views_date
+    ON article_views (view_date);
   CREATE TABLE IF NOT EXISTS distribution_logs (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     article_id    TEXT NOT NULL,

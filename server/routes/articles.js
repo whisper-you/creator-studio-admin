@@ -497,6 +497,9 @@ articlesRouter.delete('/:id', (req, res) => {
   }
   const run = withTransaction(() => {
     db.prepare('DELETE FROM comments WHERE article_id = ?').run(req.params.id)
+    db.prepare('DELETE FROM article_views WHERE article_id = ?').run(
+      req.params.id
+    )
     return db.prepare('DELETE FROM articles WHERE id = ?').run(req.params.id)
   })()
   if (run.changes === 0) return res.status(404).json({ message: '文章不存在' })
@@ -509,13 +512,28 @@ articlesRouter.delete('/:id', (req, res) => {
   res.json({ deleted: run.changes })
 })
 
-// 阅读上报:阅读量 +1(前端「最近发布」点击等场景调用)
+// 阅读上报:同一用户对同一篇文章每天只计一次,避免脚本重复刷量
 articlesRouter.post('/:id/view', (req, res) => {
-  const result = db
-    .prepare('UPDATE articles SET views = views + 1 WHERE id = ?')
-    .run(req.params.id)
-  if (result.changes === 0)
-    return res.status(404).json({ message: '文章不存在' })
+  const exists = db
+    .prepare('SELECT id FROM articles WHERE id = ?')
+    .get(req.params.id)
+  if (!exists) return res.status(404).json({ message: '文章不存在' })
+
+  const now = new Date()
+  const viewDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const inserted = db
+    .prepare(
+      `INSERT OR IGNORE INTO article_views (article_id, user_id, view_date)
+       VALUES (?, ?, ?)`
+    )
+    .run(req.params.id, req.userId, viewDate)
+
+  if (Number(inserted.changes) > 0) {
+    db.prepare('UPDATE articles SET views = views + 1 WHERE id = ?').run(
+      req.params.id
+    )
+  }
+
   const row = db
     .prepare('SELECT id, views FROM articles WHERE id = ?')
     .get(req.params.id)
@@ -536,10 +554,14 @@ articlesRouter.post('/bulk-delete', (req, res) => {
     return forbidden(res, '主编不可删除他人文章')
   }
   const deleteComments = db.prepare('DELETE FROM comments WHERE article_id = ?')
+  const deleteViews = db.prepare(
+    'DELETE FROM article_views WHERE article_id = ?'
+  )
   const deleteArticle = db.prepare('DELETE FROM articles WHERE id = ?')
   const run = withTransaction((ids) => {
     for (const id of ids) {
       deleteComments.run(id)
+      deleteViews.run(id)
       deleteArticle.run(id)
     }
   })

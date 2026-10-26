@@ -236,9 +236,10 @@ ADMIN_PASSWORD=
 # UPLOAD_RATE_LIMIT_MAX=30
 # UPLOAD_RATE_LIMIT_WINDOW_MS=3600000
 
-# 日志留存天数 (0 表示永久保留;审计默认 180 天,分发默认 90 天,每 24 小时清理一次)
+# 日志留存天数 (0 表示永久保留;审计默认 180 天,分发与阅读去重默认 90 天,每 24 小时清理一次)
 # AUDIT_LOG_RETENTION_DAYS=180
 # DISTRIBUTION_LOG_RETENTION_DAYS=90
+# ARTICLE_VIEW_RETENTION_DAYS=90
 
 # 会话有效期 (access token 默认 15 分钟;refresh token 默认 30 天)
 # ACCESS_TOKEN_TTL=15m
