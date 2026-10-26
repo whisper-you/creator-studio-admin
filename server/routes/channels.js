@@ -3,11 +3,20 @@ import { Router } from 'express'
 import { db } from '../db/index.js'
 import { recordAudit } from '../services/audit.js'
 import { testWebhook } from '../services/distribution.js'
-import { validateWebhookUrl } from '../services/webhook-url.js'
+import {
+  validateWebhookUrl,
+  MAX_WEBHOOK_URL_LENGTH,
+} from '../services/webhook-url.js'
 import { requireAuth, requireRole } from './auth.js'
 
 export const channelsRouter = Router()
 channelsRouter.use(requireAuth)
+
+const webhookUrlField = z
+  .string()
+  .max(MAX_WEBHOOK_URL_LENGTH, 'Webhook 地址超出长度限制')
+  .nullable()
+  .optional()
 
 channelsRouter.get('/', (req, res) => {
   // Webhook 地址可能内含签名密钥,只对可配置渠道的角色返回
@@ -31,7 +40,7 @@ channelsRouter.patch('/:name', requireRole('admin', 'editor'), (req, res) => {
     .object({
       connected: z.boolean().optional(),
       account: z.string().max(120).nullable().optional(),
-      webhookUrl: z.string().nullable().optional(),
+      webhookUrl: webhookUrlField,
       autoPush: z.boolean().optional(),
     })
     .safeParse(req.body)
@@ -105,7 +114,6 @@ channelsRouter.post(
   '/:name/test-webhook',
   requireRole('admin', 'editor'),
   async (req, res) => {
-    const { webhookUrl } = req.body || {}
     const channel = db
       .prepare('SELECT * FROM channels WHERE name = ?')
       .get(req.params.name)
@@ -113,6 +121,14 @@ channelsRouter.post(
       return res.status(404).json({ message: '渠道不存在' })
     }
 
+    const parsed = z
+      .object({ webhookUrl: webhookUrlField })
+      .safeParse(req.body ?? {})
+    if (!parsed.success) {
+      return res.status(400).json({ message: '字段校验失败' })
+    }
+
+    const { webhookUrl } = parsed.data
     const checked = validateWebhookUrl(
       webhookUrl !== undefined ? webhookUrl : channel.webhook_url
     )

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { validateWebhookUrl } from '../services/webhook-url.js'
+import {
+  validateWebhookUrl,
+  MAX_WEBHOOK_URL_LENGTH,
+} from '../services/webhook-url.js'
 
 const check = (url, env = {}) => validateWebhookUrl(url, { env })
 
@@ -16,6 +19,14 @@ describe('Webhook 地址校验', () => {
     expect(check('')).toEqual({ ok: true, url: null })
     expect(check(null)).toEqual({ ok: true, url: null })
     expect(check(undefined)).toEqual({ ok: true, url: null })
+  })
+
+  it('拒绝超长地址', () => {
+    const base = 'https://example.com/'
+    expect(check(base + 'a'.repeat(MAX_WEBHOOK_URL_LENGTH)).ok).toBe(false)
+    expect(
+      check(base + 'a'.repeat(MAX_WEBHOOK_URL_LENGTH - base.length))
+    ).toMatchObject({ ok: true })
   })
 
   it('拒绝非 http/https 协议与内嵌凭据', () => {

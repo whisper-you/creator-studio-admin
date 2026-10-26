@@ -1,6 +1,6 @@
 import { isIP } from 'node:net'
 
-const MAX_URL_LENGTH = 2048
+export const MAX_WEBHOOK_URL_LENGTH = 2048
 
 // 云厂商元数据服务别名,始终拒绝
 const METADATA_HOSTS = new Set([
@@ -59,10 +59,10 @@ export function validateWebhookUrl(raw, { env = process.env } = {}) {
   if (raw == null) return { ok: true, url: null }
   const value = String(raw).trim()
   if (!value) return { ok: true, url: null }
-  if (value.length > MAX_URL_LENGTH) {
+  if (value.length > MAX_WEBHOOK_URL_LENGTH) {
     return {
       ok: false,
-      message: `Webhook 地址不能超过 ${MAX_URL_LENGTH} 个字符`,
+      message: `Webhook 地址不能超过 ${MAX_WEBHOOK_URL_LENGTH} 个字符`,
     }
   }
 

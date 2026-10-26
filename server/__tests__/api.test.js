@@ -792,6 +792,35 @@ describe('渠道接口', () => {
     expect(probe.status).toBe(400)
   })
 
+  it('拒绝超长 Webhook 地址与非字符串测试参数', async () => {
+    const name = encodeURIComponent('个人网站')
+    const base = 'https://example.com/'
+
+    const tooLong = await fetch(`${baseUrl}/api/channels/${name}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ webhookUrl: base + 'a'.repeat(2048) }),
+    })
+    expect(tooLong.status).toBe(400)
+
+    for (const webhookUrl of [
+      123,
+      { nested: true },
+      base + 'a'.repeat(2048),
+      ['https://example.com/hook'],
+    ]) {
+      const probe = await fetch(
+        `${baseUrl}/api/channels/${name}/test-webhook`,
+        {
+          method: 'POST',
+          headers: authed(token),
+          body: JSON.stringify({ webhookUrl }),
+        }
+      )
+      expect(probe.status).toBe(400)
+    }
+  })
+
   it('作者无权读取渠道的 Webhook 地址', async () => {
     const name = encodeURIComponent('个人网站')
     const register = await fetch(`${baseUrl}/api/auth/register`, {
