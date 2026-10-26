@@ -698,6 +698,34 @@ describe('渠道接口', () => {
     expect(res.status).toBe(404)
   })
 
+  it('畸形百分号编码的渠道名返回 400 而非 500', async () => {
+    const res = await fetch(`${baseUrl}/api/channels/%E0%A4%A`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ connected: true }),
+    })
+    expect(res.status).toBe(400)
+
+    const probe = await fetch(`${baseUrl}/api/channels/%E0%A4%A/test-webhook`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({}),
+    })
+    expect(probe.status).toBe(400)
+  })
+
+  it('拒绝超长渠道账号名', async () => {
+    const res = await fetch(
+      `${baseUrl}/api/channels/${encodeURIComponent('知乎')}`,
+      {
+        method: 'PATCH',
+        headers: authed(token),
+        body: JSON.stringify({ account: 'x'.repeat(121) }),
+      }
+    )
+    expect(res.status).toBe(400)
+  })
+
   it('拒绝非法 Webhook 地址与云元数据地址', async () => {
     const name = encodeURIComponent('个人网站')
     const patch = (webhookUrl) =>
@@ -1072,6 +1100,11 @@ describe('会话续期与登出', () => {
 
   it('未携带 refresh cookie 时返回 401', async () => {
     const res = await refreshWith(null)
+    expect(res.status).toBe(401)
+  })
+
+  it('畸形百分号编码的 refresh cookie 返回 401 而非 500', async () => {
+    const res = await refreshWith('cs_refresh=%E0%A4%A')
     expect(res.status).toBe(401)
   })
 

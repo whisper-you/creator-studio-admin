@@ -179,11 +179,20 @@ export function revokeOtherSessions(userId, currentToken) {
     .changes
 }
 
+/** Cookie 值可能被客户端写成畸形百分号编码,解码失败时按原值处理,避免 500 */
+function decodeCookieValue(value) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 export function readRefreshCookie(req) {
   const header = req.headers.cookie ?? ''
   for (const part of header.split(';')) {
     const [name, ...rest] = part.trim().split('=')
-    if (name === REFRESH_COOKIE) return decodeURIComponent(rest.join('='))
+    if (name === REFRESH_COOKIE) return decodeCookieValue(rest.join('='))
   }
   return null
 }

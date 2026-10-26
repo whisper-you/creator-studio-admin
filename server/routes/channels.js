@@ -25,95 +25,84 @@ channelsRouter.get('/', (req, res) => {
 })
 
 // 更新渠道配置(绑定状态、账号名、Webhook 地址与自动推送开关)
-channelsRouter.patch(
-  '/:name',
-  (req, res, next) => {
-    req.params.name = decodeURIComponent(req.params.name)
-    next()
-  },
-  requireRole('admin', 'editor'),
-  (req, res) => {
-    const parsed = z
-      .object({
-        connected: z.boolean().optional(),
-        account: z.string().nullable().optional(),
-        webhookUrl: z.string().nullable().optional(),
-        autoPush: z.boolean().optional(),
-      })
-      .safeParse(req.body)
-    if (!parsed.success) {
-      return res.status(400).json({ message: '字段校验失败' })
+// Express 已对路由参数解码,这里不要再 decodeURIComponent,否则畸形编码会抛 URIError
+channelsRouter.patch('/:name', requireRole('admin', 'editor'), (req, res) => {
+  const parsed = z
+    .object({
+      connected: z.boolean().optional(),
+      account: z.string().max(120).nullable().optional(),
+      webhookUrl: z.string().nullable().optional(),
+      autoPush: z.boolean().optional(),
+    })
+    .safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: '字段校验失败' })
+  }
+
+  const { connected, account, webhookUrl, autoPush } = parsed.data
+  const current = db
+    .prepare('SELECT * FROM channels WHERE name = ?')
+    .get(req.params.name)
+  if (!current) {
+    return res.status(404).json({ message: '渠道不存在' })
+  }
+
+  let nextWebhookUrl = current.webhook_url
+  if (webhookUrl !== undefined) {
+    const checked = validateWebhookUrl(webhookUrl)
+    if (!checked.ok) {
+      return res.status(400).json({ message: checked.message })
     }
+    nextWebhookUrl = checked.url
+  }
 
-    const { connected, account, webhookUrl, autoPush } = parsed.data
-    const current = db
-      .prepare('SELECT * FROM channels WHERE name = ?')
-      .get(req.params.name)
-    if (!current) {
-      return res.status(404).json({ message: '渠道不存在' })
-    }
+  const nextConnected =
+    connected !== undefined ? (connected ? 1 : 0) : current.connected
+  const nextAccount = account !== undefined ? account : current.account
+  const nextAutoPush =
+    autoPush !== undefined ? (autoPush ? 1 : 0) : current.auto_push
 
-    let nextWebhookUrl = current.webhook_url
-    if (webhookUrl !== undefined) {
-      const checked = validateWebhookUrl(webhookUrl)
-      if (!checked.ok) {
-        return res.status(400).json({ message: checked.message })
-      }
-      nextWebhookUrl = checked.url
-    }
-
-    const nextConnected =
-      connected !== undefined ? (connected ? 1 : 0) : current.connected
-    const nextAccount = account !== undefined ? account : current.account
-    const nextAutoPush =
-      autoPush !== undefined ? (autoPush ? 1 : 0) : current.auto_push
-
-    db.prepare(
-      `
+  db.prepare(
+    `
       UPDATE channels
       SET connected = ?, account = ?, webhook_url = ?, auto_push = ?
       WHERE name = ?
     `
-    ).run(
-      nextConnected,
-      nextAccount,
-      nextWebhookUrl,
-      nextAutoPush,
-      req.params.name
-    )
+  ).run(
+    nextConnected,
+    nextAccount,
+    nextWebhookUrl,
+    nextAutoPush,
+    req.params.name
+  )
 
-    // 只记录变更字段名与开关值,避免把含密钥的 Webhook 地址写进审计日志
-    recordAudit(req, {
-      action: 'channel.update',
-      entityType: 'channel',
-      entityId: req.params.name,
-      detail: {
-        fields: Object.keys(parsed.data),
-        connected: !!nextConnected,
-        autoPush: !!nextAutoPush,
-      },
-    })
+  // 只记录变更字段名与开关值,避免把含密钥的 Webhook 地址写进审计日志
+  recordAudit(req, {
+    action: 'channel.update',
+    entityType: 'channel',
+    entityId: req.params.name,
+    detail: {
+      fields: Object.keys(parsed.data),
+      connected: !!nextConnected,
+      autoPush: !!nextAutoPush,
+    },
+  })
 
-    const updated = db
-      .prepare('SELECT * FROM channels WHERE name = ?')
-      .get(req.params.name)
-    res.json({
-      name: updated.name,
-      account: updated.account ?? undefined,
-      connected: !!updated.connected,
-      webhookUrl: updated.webhook_url ?? undefined,
-      autoPush: !!updated.auto_push,
-    })
-  }
-)
+  const updated = db
+    .prepare('SELECT * FROM channels WHERE name = ?')
+    .get(req.params.name)
+  res.json({
+    name: updated.name,
+    account: updated.account ?? undefined,
+    connected: !!updated.connected,
+    webhookUrl: updated.webhook_url ?? undefined,
+    autoPush: !!updated.auto_push,
+  })
+})
 
 // 测试 Webhook 连通性
 channelsRouter.post(
   '/:name/test-webhook',
-  (req, res, next) => {
-    req.params.name = decodeURIComponent(req.params.name)
-    next()
-  },
   requireRole('admin', 'editor'),
   async (req, res) => {
     const { webhookUrl } = req.body || {}
