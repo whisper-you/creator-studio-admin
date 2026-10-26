@@ -92,6 +92,17 @@ if (existsSync(distDir)) {
 }
 
 app.use((err, _req, res, _next) => {
+  // express.json 的解析/体积错误自带 4xx 状态码,按客户端错误返回而非 500
+  const status = Number(err.status ?? err.statusCode)
+  if (Number.isInteger(status) && status >= 400 && status < 500) {
+    const message =
+      err.type === 'entity.too.large'
+        ? '请求体过大'
+        : err.type === 'entity.parse.failed'
+          ? '请求体不是合法的 JSON'
+          : '请求体不合法'
+    return res.status(status).json({ message })
+  }
   console.error(err)
   res.status(500).json({ message: '服务器内部错误' })
 })

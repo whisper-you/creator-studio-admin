@@ -9,7 +9,7 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express)
 ![SQLite](https://img.shields.io/badge/SQLite-node:sqlite-003B57?style=flat-square&logo=sqlite)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
-![Tests](https://img.shields.io/badge/Tests-136%20Passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-138%20Passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 <p align="center">
@@ -387,13 +387,13 @@ pnpm build
 - `server/__tests__/api.test.js`：85 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、登录设备列表与撤销、管理员角色调整/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
 - `server/__tests__/jwt-secret.test.js`：8 个 JWT 密钥解析与生产启动校验测试全部通过。
 - `server/__tests__/seed-policy.test.js`：12 个种子数据策略、管理员引导与生产初始化测试全部通过。
-- `server/__tests__/security.test.js`：10 个安全响应头、CORS 白名单与认证限流测试全部通过。
+- `server/__tests__/security.test.js`：12 个安全响应头、CORS 白名单、认证限流与请求体解析错误（400/413）测试全部通过。
 - `server/__tests__/observability.test.js`：5 个健康检查、请求 ID 透传与 API 404 兜底测试全部通过。
 - `src/features/articles/utils/parse-markdown.test.ts`：5 个 Frontmatter 解析与容错测试全部通过。
 - `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
 - `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
 - `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
-- **全套 136 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
+- **全套 138 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
 
 ---
 

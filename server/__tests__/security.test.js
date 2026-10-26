@@ -132,6 +132,29 @@ describe('安全响应头与 CORS', () => {
   })
 })
 
+describe('请求体错误处理', () => {
+  it('非法 JSON 返回 400 而非 500', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"email":',
+    })
+    expect(res.status).toBe(400)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    expect((await res.json()).message).toBe('请求体不是合法的 JSON')
+  })
+
+  it('超限请求体返回 413', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'x'.repeat(26 * 1024 * 1024),
+    })
+    expect(res.status).toBe(413)
+    expect((await res.json()).message).toBe('请求体过大')
+  })
+})
+
 describe('认证端点限流', () => {
   const email = 'limited@test.dev'
   let token

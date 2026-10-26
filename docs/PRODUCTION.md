@@ -84,7 +84,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - 图片以 Base64 形式提交到 `POST /api/materials/upload`，服务端解码后写入本地 `uploads/`，文件名由服务端生成。
 - 上传已做格式与大小校验：仅允许 PNG / JPEG / WebP / GIF，单文件上限 5 MB；服务端会校验文件头（魔数）并与声明的 MIME 交叉比对，SVG 及其他格式一律拒绝。前端上传入口同步限制文件类型与大小。
 - `uploads/` 通过 `express.static` 直接公开访问，不经过鉴权。
-- JSON 请求体上限为 25 MB，Nginx 参考配置中 `client_max_body_size` 为 30 MB；实际单图仍受 5 MB 业务限制。
+- JSON 请求体上限为 25 MB，Nginx 参考配置中 `client_max_body_size` 为 30 MB；实际单图仍受 5 MB 业务限制。非法 JSON 返回 400、超限请求体返回 413，均为 JSON 错误体而不会误报 500。
 
 **影响**
 
