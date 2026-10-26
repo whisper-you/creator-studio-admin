@@ -88,6 +88,32 @@ describe('POST /api/auth/login', () => {
   })
 })
 
+describe('邮箱大小写归一化', () => {
+  it('注册/登录忽略大小写,且不会产生重复账号', async () => {
+    const register = (email) =>
+      fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password: 'password123',
+          name: '大小写',
+        }),
+      })
+
+    const first = await register('Mixed.Case@Test.dev')
+    expect(first.status).toBe(201)
+    expect((await first.json()).user.email).toBe('mixed.case@test.dev')
+
+    const duplicate = await register('MIXED.CASE@TEST.DEV')
+    expect(duplicate.status).toBe(409)
+
+    const loginRes = await login('Mixed.Case@Test.dev', 'password123')
+    expect(loginRes.status).toBe(200)
+    expect((await loginRes.json()).user.email).toBe('mixed.case@test.dev')
+  })
+})
+
 describe('文章接口鉴权', () => {
   it('未带 token 返回 401', async () => {
     const res = await fetch(`${baseUrl}/api/articles`)

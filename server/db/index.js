@@ -200,6 +200,14 @@ try {
   db.exec('ALTER TABLE refresh_tokens ADD COLUMN last_used_at TEXT')
 } catch (_) {}
 
+// 历史邮箱统一转小写;若库中已存在仅大小写不同的账号会触发唯一约束,
+// 此时保留原样并告警,交由管理员人工合并
+try {
+  db.exec('UPDATE users SET email = lower(email) WHERE email <> lower(email)')
+} catch (err) {
+  console.error('[db] 邮箱大小写归一化失败:', err)
+}
+
 export function articleRowToJson(row) {
   if (!row) return null
   return {

@@ -25,8 +25,11 @@ import {
 resolveJwtSecret()
 const USER_ROLES = ['admin', 'editor', 'author']
 
+// 邮箱统一小写入库/查询,避免大小写变体产生重复账号或登录失败
+const emailField = z.email().transform((email) => email.toLowerCase())
+
 const loginSchema = z.object({
-  email: z.email(),
+  email: emailField,
   password: z.string().min(1),
 })
 

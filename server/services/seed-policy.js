@@ -8,7 +8,7 @@ const parseFlag = (value) => {
 }
 
 function resolveAdminBootstrap(env) {
-  const email = (env.ADMIN_EMAIL ?? '').trim()
+  const email = (env.ADMIN_EMAIL ?? '').trim().toLowerCase()
   const password = env.ADMIN_PASSWORD ?? ''
 
   if (!email && !password) return null

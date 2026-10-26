@@ -142,6 +142,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - 登录设备列表：`GET /api/auth/sessions` 返回当前账号全部有效会话（User-Agent、IP、创建时间、最近活动时间，并标记 `current`）；`DELETE /api/auth/sessions/:id` 撤销指定非当前会话（撤销当前会话返回 400，请走登出）；`DELETE /api/auth/sessions` 撤销除当前设备外的全部会话并返回撤销数量。撤销立即失效并写入 `auth.session_revoke` / `auth.session_revoke_others` 审计。会话元数据在登录/注册/刷新续期时写入 `refresh_tokens` 的 `user_agent` / `ip` / `last_used_at` 列（ip 为 `req.ip`，反向代理场景依赖 `TRUST_PROXY` 配置）。
 - 服务端尚未提供忘记密码邮件重置；`/api/auth/me` 仅支持修改昵称与角色。
 - 公开注册固定创建 `author` 用户。
+- 邮箱在注册、登录与管理员引导中统一转小写；启动时会把历史邮箱迁移为小写，若库中已存在仅大小写不同的账号则保留原样并输出告警，需管理员人工处理。
 - 认证端点已限流：登录 30 次/15 分钟、注册 5 次/小时、改密 10 次/15 分钟、刷新 120 次/15 分钟，按客户端 IP 计数；单进程内存实现，重启清零。阈值可通过 `AUTH_RATE_LIMIT_*` / `REGISTER_RATE_LIMIT_*` / `CHANGE_PASSWORD_RATE_LIMIT_MAX` / `REFRESH_RATE_LIMIT_MAX` 调整。
 - CORS 默认仅同源：开发/测试放行本地 Vite（`localhost:5173`），生产不启用跨域；前后端分域部署时通过 `CORS_ORIGINS`（逗号分隔）显式放行。
 - 已启用 Helmet 安全响应头（CSP 放行 Google Fonts 与内联样式，未强制 `upgrade-insecure-requests`）。生产构建已在真实浏览器中验证登录、看板与设置页无 CSP 拦截。
