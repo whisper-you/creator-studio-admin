@@ -9,7 +9,7 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express)
 ![SQLite](https://img.shields.io/badge/SQLite-node:sqlite-003B57?style=flat-square&logo=sqlite)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
-![Tests](https://img.shields.io/badge/Tests-164%20Passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-166%20Passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 <p align="center">
@@ -115,7 +115,7 @@
 - **短时令牌与静默续期**：access token 默认 15 分钟且签名/校验固定为 HS256，refresh token 存于 HttpOnly + SameSite Cookie（默认 30 天）。前端在 401 时自动单飞刷新并重放请求；每次刷新轮换 refresh token，旧 token 被重放会吊销该用户全部会话。退出登录会同时吊销服务端会话。
 - **用户与会话管理**：管理员可在「用户管理」中搜索账号、查看活跃会话数，并调整角色、停用/启用账号、重置密码或强制下线。角色变更立即生效（鉴权每次从数据库读取角色），无需对方重新登录；停用会递增 `token_version`、吊销全部 refresh token，目标账号立即掉线且无法登录，启用后恢复；重置密码会设置新密码并吊销会话；强制下线只吊销会话不改密码。所有操作均写入审计日志，且禁止对自己执行（改自己密码请走个人设置，退出自己请走登出）。
 - **登录设备管理**：登录会话会记录 User-Agent 与 IP，「设置 → 个人资料」可查看全部有效设备（标记当前设备、最近活动时间），支持单独退出某一设备或一键退出其他所有设备；撤销立即生效并写入 `auth.session_revoke` / `auth.session_revoke_others` 审计。
-- **安全边界加固**：Helmet 安全响应头（含 CSP）、CORS 白名单（默认仅同源）、登录/注册/改密限流；图床上传仅允许 PNG/JPEG/WebP/GIF 且单图不超过 5 MB，并校验文件头，详见 [生产环境边界说明](./docs/PRODUCTION.md)。
+- **安全边界加固**：Helmet 安全响应头（含 CSP）、CORS 白名单（默认仅同源）、登录/注册/改密限流；图床上传仅允许 PNG/JPEG/WebP/GIF 且单图不超过 5 MB，校验文件头并按用户限制上传频率，详见 [生产环境边界说明](./docs/PRODUCTION.md)。
 - **无缝身份切换器**：右上角个人头像下拉框提供一键切换 Admin / Editor / Author 角色，便于多角色流程验证。该功能默认仅在非生产环境开放；生产环境如需保留演示能力，可显式设置 `ALLOW_ROLE_SWITCH=true`。
 
 ---
@@ -231,6 +231,10 @@ ADMIN_PASSWORD=
 # AUTH_RATE_LIMIT_MAX=30
 # REGISTER_RATE_LIMIT_MAX=5
 # REFRESH_RATE_LIMIT_MAX=120
+
+# 图片上传限流,按登录用户计数 (默认 30 次/小时)
+# UPLOAD_RATE_LIMIT_MAX=30
+# UPLOAD_RATE_LIMIT_WINDOW_MS=3600000
 
 # 日志留存天数 (0 表示永久保留;审计默认 180 天,分发默认 90 天,每 24 小时清理一次)
 # AUDIT_LOG_RETENTION_DAYS=180
@@ -398,14 +402,14 @@ pnpm build
 - `server/__tests__/webhook-url.test.js`：4 个 Webhook 协议、凭据、云元数据/链路本地与私网拦截测试全部通过。
 - `server/__tests__/jwt-secret.test.js`：8 个 JWT 密钥解析与生产启动校验测试全部通过。
 - `server/__tests__/seed-policy.test.js`：12 个种子数据策略、管理员引导与生产初始化测试全部通过。
-- `server/__tests__/security.test.js`：12 个安全响应头、CORS 白名单、认证限流与请求体解析错误（400/413）测试全部通过。
+- `server/__tests__/security.test.js`：14 个安全响应头、CORS 白名单、认证限流、上传频率与请求体解析错误（400/413）测试全部通过。
 - `server/__tests__/observability.test.js`：5 个健康检查、请求 ID 透传与 API 404 兜底测试全部通过。
 - `server/__tests__/retention.test.js`：5 个日志留存默认值、环境变量覆盖、非法值回退、超期清理与永久保留测试全部通过。
 - `src/features/articles/utils/parse-markdown.test.ts`：5 个 Frontmatter 解析与容错测试全部通过。
 - `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
 - `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
 - `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
-- **全套 164 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
+- **全套 166 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
 
 ---
 

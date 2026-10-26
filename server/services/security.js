@@ -51,16 +51,21 @@ export function resolveRateLimits(env = process.env) {
       windowMs: positiveInt(env.AUTH_RATE_LIMIT_WINDOW_MS, 15 * MINUTE),
       limit: positiveInt(env.REFRESH_RATE_LIMIT_MAX, 120),
     },
+    upload: {
+      windowMs: positiveInt(env.UPLOAD_RATE_LIMIT_WINDOW_MS, 60 * MINUTE),
+      limit: positiveInt(env.UPLOAD_RATE_LIMIT_MAX, 30),
+    },
   }
 }
 
-function createLimiter({ windowMs, limit }) {
+function createLimiter({ windowMs, limit, keyGenerator }) {
   return rateLimit({
     windowMs,
     limit,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { message: '请求过于频繁,请稍后再试' },
+    ...(keyGenerator ? { keyGenerator } : {}),
   })
 }
 
@@ -73,6 +78,14 @@ export function createAuthLimiters(env = process.env) {
     changePasswordLimiter: createLimiter(limits.changePassword),
     refreshLimiter: createLimiter(limits.refresh),
   }
+}
+
+/** 图片上传限流:按登录用户计数,避免单个账号反复写入大文件占满磁盘 */
+export function createUploadLimiter(env = process.env) {
+  return createLimiter({
+    ...resolveRateLimits(env).upload,
+    keyGenerator: (req) => `user:${req.userId}`,
+  })
 }
 
 /**

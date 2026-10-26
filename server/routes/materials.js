@@ -1,8 +1,10 @@
+import { z } from 'zod'
 import { Router } from 'express'
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { db } from '../db/index.js'
+import { createUploadLimiter } from '../services/security.js'
 import { requireAuth } from './auth.js'
 
 export const materialsRouter = Router()
@@ -12,6 +14,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const uploadsDir = join(__dirname, '../../uploads')
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+const uploadLimiter = createUploadLimiter()
+
+// 元数据只用于展示与素材库检索,限制长度避免超长内容写入数据库
+const metaSchema = z.object({
+  filename: z.string().trim().max(160).optional(),
+  name: z.string().trim().max(80).optional(),
+  scene: z.string().trim().max(40).optional(),
+})
+
+const META_LABELS = {
+  filename: '文件名',
+  name: '素材名称',
+  scene: '使用场景',
+}
 
 // 仅允许位图格式;SVG 可内嵌脚本,一律拒绝
 const ALLOWED_TYPES = {
@@ -76,11 +93,20 @@ materialsRouter.get('/', (_req, res) => {
  * 本地自托管图床上传接口(无需任何外部账号、无需云服务配置)
  * 将图片保存至本地 uploads/ 目录，并在素材库中自动记录
  */
-materialsRouter.post('/upload', (req, res) => {
-  const { dataUrl, filename, name, scene } = req.body || {}
+materialsRouter.post('/upload', uploadLimiter, (req, res) => {
+  const { dataUrl } = req.body || {}
   if (!dataUrl || typeof dataUrl !== 'string') {
     return res.status(400).json({ message: '缺少图片数据 (dataUrl)' })
   }
+
+  const parsedMeta = metaSchema.safeParse(req.body)
+  if (!parsedMeta.success) {
+    const field = parsedMeta.error.issues[0]?.path?.[0]
+    return res.status(400).json({
+      message: `${META_LABELS[field] ?? '字段'}超出长度限制`,
+    })
+  }
+  const { filename, name, scene } = parsedMeta.data
 
   const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/)
   if (!matches) {

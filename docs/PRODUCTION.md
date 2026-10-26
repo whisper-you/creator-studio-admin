@@ -83,6 +83,8 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 
 - 图片以 Base64 形式提交到 `POST /api/materials/upload`，服务端解码后写入本地 `uploads/`，文件名由服务端生成。
 - 上传已做格式与大小校验：仅允许 PNG / JPEG / WebP / GIF，单文件上限 5 MB；服务端会校验文件头（魔数）并与声明的 MIME 交叉比对，SVG 及其他格式一律拒绝。前端上传入口同步限制文件类型与大小。
+- 上传元数据长度受限：`filename` ≤ 160、`name` ≤ 80、`scene` ≤ 40 字符，避免超长内容写入数据库。
+- 上传接口按登录用户限流，默认 30 次/小时，可通过 `UPLOAD_RATE_LIMIT_MAX` / `UPLOAD_RATE_LIMIT_WINDOW_MS` 调整；单进程内存计数，重启清零。
 - `uploads/` 通过 `express.static` 直接公开访问，不经过鉴权。
 - JSON 请求体上限为 25 MB，Nginx 参考配置中 `client_max_body_size` 为 30 MB；实际单图仍受 5 MB 业务限制。非法 JSON 返回 400、超限请求体返回 413，均为 JSON 错误体而不会误报 500。
 
@@ -218,6 +220,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - [ ] CORS 已按部署形态确认：同源部署保持为空，分域部署已设置 `CORS_ORIGINS` 白名单
 - [ ] 反向代理部署已设置 `TRUST_PROXY`，且层数与实际拓扑一致
 - [ ] 已按业务量评估认证限流阈值（默认登录 30 次/15 分钟、刷新 120 次/15 分钟）
+- [ ] 已评估图片上传频率阈值（默认 30 次/小时/用户）与磁盘容量告警
 - [ ] 已确认审计/分发日志留存策略（默认 180 / 90 天，`0` 为永久保留）
 - [ ] 已确认会话有效期符合预期（默认 access 15 分钟、refresh 30 天）
 - [ ] 已配置进程守护与开机自启

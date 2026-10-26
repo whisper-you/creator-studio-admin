@@ -1,4 +1,5 @@
 // 安全中间件:响应头、CORS 白名单与认证限流(真实 Express app + 临时库)
+import { existsSync, readdirSync, unlinkSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,11 +17,13 @@ process.env.AUTH_RATE_LIMIT_MAX = '2'
 process.env.AUTH_RATE_LIMIT_WINDOW_MS = '60000'
 process.env.REGISTER_RATE_LIMIT_MAX = '1'
 process.env.CHANGE_PASSWORD_RATE_LIMIT_MAX = '1'
+process.env.UPLOAD_RATE_LIMIT_MAX = '3'
 
 const { app } = await import('../index.js')
 
 let baseUrl
 let server
+let token
 
 beforeAll(async () => {
   await new Promise((resolve) => {
@@ -31,6 +34,19 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise((resolve) => server.close(() => resolve()))
+
+  const uploadsDir = join(process.cwd(), 'uploads')
+  if (existsSync(uploadsDir)) {
+    for (const file of readdirSync(uploadsDir)) {
+      if (file.startsWith('rate-limit-test-')) {
+        try {
+          unlinkSync(join(uploadsDir, file))
+        } catch {
+          // 忽略文件已被并发删除
+        }
+      }
+    }
+  }
 })
 
 const postJson = (path, body, headers = {}) =>
@@ -74,16 +90,19 @@ describe('安全策略解析', () => {
       limit: 10,
     })
     expect(defaults.refresh).toEqual({ windowMs: 15 * 60_000, limit: 120 })
+    expect(defaults.upload).toEqual({ windowMs: 60 * 60_000, limit: 30 })
 
     const overridden = resolveRateLimits({
       AUTH_RATE_LIMIT_MAX: '7',
       AUTH_RATE_LIMIT_WINDOW_MS: '1000',
       REGISTER_RATE_LIMIT_MAX: 'not-a-number',
       CHANGE_PASSWORD_RATE_LIMIT_MAX: '0',
+      UPLOAD_RATE_LIMIT_MAX: '5',
     })
     expect(overridden.login).toEqual({ windowMs: 1000, limit: 7 })
     expect(overridden.register.limit).toBe(5)
     expect(overridden.changePassword.limit).toBe(10)
+    expect(overridden.upload.limit).toBe(5)
   })
 })
 
@@ -157,7 +176,6 @@ describe('请求体错误处理', () => {
 
 describe('认证端点限流', () => {
   const email = 'limited@test.dev'
-  let token
 
   it('注册接口超过阈值后返回 429', async () => {
     const first = await postJson('/api/auth/register', {
@@ -208,5 +226,36 @@ describe('认证端点限流', () => {
       password: 'password123',
     })
     expect(blocked.status).toBe(429)
+  })
+})
+
+describe('素材上传元数据与频率限制', () => {
+  // 1x1 透明 PNG
+  const tinyPng =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
+  const upload = (body) =>
+    postJson('/api/materials/upload', body, {
+      Authorization: `Bearer ${token}`,
+    })
+
+  it('素材名称超过长度上限返回 400', async () => {
+    const res = await upload({ dataUrl: tinyPng, name: 'x'.repeat(81) })
+    expect(res.status).toBe(400)
+    expect((await res.json()).message).toContain('素材名称')
+  })
+
+  it('超过单用户上传频率后返回 429', async () => {
+    for (let i = 0; i < 2; i += 1) {
+      const res = await upload({
+        dataUrl: tinyPng,
+        filename: 'rate-limit-test.png',
+      })
+      expect(res.status).toBe(201)
+    }
+
+    const blocked = await upload({ dataUrl: tinyPng })
+    expect(blocked.status).toBe(429)
+    expect((await blocked.json()).message).toContain('请求过于频繁')
   })
 })

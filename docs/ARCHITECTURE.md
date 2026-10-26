@@ -39,7 +39,7 @@ creator-studio-admin/
 │   │   ├── session.js            # 短时 access token(固定 HS256) + HttpOnly refresh token 轮换/吊销/设备会话列表
 │   │   ├── observability.js      # X-Request-Id、结构化访问日志与就绪检查
 │   │   ├── seed-policy.js        # 演示数据开关与生产管理员引导策略
-│   │   ├── security.js           # Helmet 安全头、CORS 白名单与认证端点限流
+│   │   ├── security.js           # Helmet 安全头、CORS 白名单、认证与上传限流
 │   │   ├── distribution.js       # 多平台 Webhook 分发与通道拟真引擎
 │   │   ├── webhook-url.js        # Webhook 地址校验与 SSRF 防护（云元数据/私网拦截）
 │   │   ├── retention.js          # 审计/分发日志留存清理（默认 180 / 90 天，0 为永久保留）
