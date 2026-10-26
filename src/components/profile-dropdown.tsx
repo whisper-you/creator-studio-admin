@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { Link } from '@tanstack/react-router'
 import { Shield, ShieldAlert, UserCheck, Users } from 'lucide-react'
 import { toast } from 'sonner'
@@ -21,20 +22,26 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SignOutDialog } from '@/components/sign-out-dialog'
 
-const roleMeta: Record<UserRole, { label: string; badgeClass: string; icon: typeof Shield }> = {
+const roleMeta: Record<
+  UserRole,
+  { label: string; badgeClass: string; icon: typeof Shield }
+> = {
   admin: {
     label: '系统管理员',
-    badgeClass: 'bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300 border-red-200 dark:border-red-800',
+    badgeClass:
+      'bg-red-100 text-red-700 dark:bg-red-950/80 dark:text-red-300 border-red-200 dark:border-red-800',
     icon: ShieldAlert,
   },
   editor: {
     label: '审校主编',
-    badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    badgeClass:
+      'bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border-blue-200 dark:border-blue-800',
     icon: Shield,
   },
   author: {
     label: '签约作者',
-    badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+    badgeClass:
+      'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
     icon: UserCheck,
   },
 }
@@ -54,7 +61,12 @@ export function ProfileDropdown() {
         setUser({ ...user, role: targetRole })
       }
       toast.success(`角色权限已切换至「${roleMeta[targetRole].label}」`)
-    } catch (_err) {
+    } catch (err) {
+      // 生产环境服务端会拒绝角色自助切换,不能只改本地状态
+      if (axios.isAxiosError(err) && err.response?.status === 403) {
+        toast.error('当前环境已禁用角色切换')
+        return
+      }
       if (user) {
         setUser({ ...user, role: targetRole })
       }
@@ -79,16 +91,16 @@ export function ProfileDropdown() {
           <DropdownMenuLabel className='font-normal'>
             <div className='flex flex-col gap-1.5'>
               <div className='flex items-center justify-between'>
-                <p className='text-sm leading-none font-medium truncate max-w-32'>
+                <p className='max-w-32 truncate text-sm leading-none font-medium'>
                   {user?.name || '创作者'}
                 </p>
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${currentRoleInfo.badgeClass}`}
+                  className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${currentRoleInfo.badgeClass}`}
                 >
                   {currentRoleInfo.label}
                 </span>
               </div>
-              <p className='text-xs leading-none text-muted-foreground truncate'>
+              <p className='truncate text-xs leading-none text-muted-foreground'>
                 {user?.email || 'creator@studio.dev'}
               </p>
             </div>
@@ -117,23 +129,29 @@ export function ProfileDropdown() {
               <DropdownMenuSubContent className='w-44'>
                 <DropdownMenuItem
                   onClick={() => handleSwitchRole('admin')}
-                  className={currentRole === 'admin' ? 'font-semibold text-primary' : ''}
+                  className={
+                    currentRole === 'admin' ? 'font-semibold text-primary' : ''
+                  }
                 >
-                  <ShieldAlert className='size-3.5 text-red-500 mr-1' />
+                  <ShieldAlert className='mr-1 size-3.5 text-red-500' />
                   系统管理员
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => handleSwitchRole('editor')}
-                  className={currentRole === 'editor' ? 'font-semibold text-primary' : ''}
+                  className={
+                    currentRole === 'editor' ? 'font-semibold text-primary' : ''
+                  }
                 >
-                  <Shield className='size-3.5 text-blue-500 mr-1' />
+                  <Shield className='mr-1 size-3.5 text-blue-500' />
                   审校主编
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => handleSwitchRole('author')}
-                  className={currentRole === 'author' ? 'font-semibold text-primary' : ''}
+                  className={
+                    currentRole === 'author' ? 'font-semibold text-primary' : ''
+                  }
                 >
-                  <UserCheck className='size-3.5 text-emerald-500 mr-1' />
+                  <UserCheck className='mr-1 size-3.5 text-emerald-500' />
                   签约作者
                 </DropdownMenuItem>
               </DropdownMenuSubContent>

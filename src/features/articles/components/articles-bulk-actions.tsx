@@ -1,8 +1,12 @@
 import { type Table } from '@tanstack/react-table'
-import { CircleArrowUp, Download, FileSpreadsheet, FileText, Trash2 } from 'lucide-react'
+import {
+  CircleArrowUp,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
-import { downloadCsv } from '../utils/download-csv'
-import { exportArticlesAsMarkdown } from '../utils/export-article'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -19,6 +23,8 @@ import { DataTableBulkActions as BulkActionsToolbar } from '@/components/data-ta
 import { statuses } from '../data/data'
 import { type Article } from '../data/schema'
 import { useArticlesStore } from '../store'
+import { downloadCsv } from '../utils/download-csv'
+import { exportArticlesAsMarkdown } from '../utils/export-article'
 import { ArticlesMultiDeleteDialog } from './articles-multi-delete-dialog'
 import { useArticles } from './articles-provider'
 
@@ -139,7 +145,10 @@ export function ArticlesBulkActions<TData>({
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent sideOffset={14} className='w-44'>
-            <DropdownMenuItem onClick={handleBulkExportMarkdown} className='gap-2'>
+            <DropdownMenuItem
+              onClick={handleBulkExportMarkdown}
+              className='gap-2'
+            >
               <FileText className='size-4 text-muted-foreground' />
               <span>导出 Markdown (.md)</span>
             </DropdownMenuItem>

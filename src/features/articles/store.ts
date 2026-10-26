@@ -45,9 +45,32 @@ type ArticlesState = {
 
 const dateToIso = (d: Date | undefined) => d?.toISOString() ?? null
 
+/** 乐观锁版本号:本地先 +1,服务端成功后以其返回值为准(下次 hydrate 刷新) */
+const bumpVersion = (a: Article): number => (a.version ?? 1) + 1
+
+const isConflictError = (err: unknown): boolean =>
+  typeof err === 'object' &&
+  err !== null &&
+  (err as { response?: { status?: number } }).response?.status === 409
+
 export const useArticlesStore = create<ArticlesState>()(
   persist(
     (set, get) => {
+      /** 同步失败:回滚本地;409 冲突时额外拉取服务端最新数据 */
+      const handleSyncError = (
+        prev: Article[],
+        err: unknown,
+        fallback = '数据同步失败,已回滚(请确认后端 pnpm run server 是否启动)'
+      ) => {
+        set({ articles: prev })
+        if (isConflictError(err)) {
+          toast.error('文章已被他人修改,已刷新为最新数据')
+          void get().hydrate()
+          return
+        }
+        toast.error(fallback)
+      }
+
       /** 乐观更新骨架:先本地生效,服务端失败时回滚 */
       const optimistic = (
         mutate: () => Article[],
@@ -59,11 +82,17 @@ export const useArticlesStore = create<ArticlesState>()(
         // Promise.resolve 包一层:sync 同步抛错(或返回 undefined)也能被捕获回滚
         Promise.resolve()
           .then(sync)
-          .catch(() => {
-            set({ articles: prev })
-            toast.error('数据同步失败,已回滚(请确认后端 pnpm server 是否启动)')
-          })
+          .catch((err) => handleSyncError(prev, err))
       }
+
+      /** 读当前本地版本号,供写请求带上乐观锁 */
+      const versionsOf = (ids: Article['id'][]) =>
+        Object.fromEntries(
+          ids.map((id) => [
+            id,
+            get().articles.find((a) => a.id === id)?.version,
+          ])
+        ) as Record<string, number | undefined>
 
       return {
         articles: seedArticles,
@@ -90,12 +119,15 @@ export const useArticlesStore = create<ArticlesState>()(
             () => articlesApi.createBulk(newArticles)
           ),
 
-        updateArticles: (ids, patch) =>
+        updateArticles: (ids, patch) => {
+          const versions = versionsOf(ids)
           optimistic(
             () => {
               const idSet = new Set(ids)
               return get().articles.map((a) =>
-                idSet.has(a.id) ? { ...a, ...patch } : a
+                idSet.has(a.id)
+                  ? { ...a, ...patch, version: bumpVersion(a) }
+                  : a
               )
             },
             async () => {
@@ -120,10 +152,18 @@ export const useArticlesStore = create<ArticlesState>()(
                     : dateToIso(patch.publishedAt),
                 updatedAt: new Date().toISOString(),
               }
-              if (ids.length === 1) await articlesApi.update(ids[0]!, wire)
-              else await articlesApi.updateBulk(ids, wire)
+              if (ids.length === 1) {
+                await articlesApi.update(ids[0]!, wire, versions[ids[0]!])
+                return
+              }
+              // 批量接口要求 versions 覆盖全部 ID,离线数据缺版本号时退回无锁更新
+              const complete = ids.every((id) => versions[id] !== undefined)
+                ? (versions as Record<string, number>)
+                : undefined
+              await articlesApi.updateBulk(ids, wire, complete)
             }
-          ),
+          )
+        },
 
         deleteArticles: (ids) =>
           optimistic(
@@ -137,6 +177,7 @@ export const useArticlesStore = create<ArticlesState>()(
         transitionStatus: (ids, to) => {
           const idSet = new Set(ids)
           // 先在本地按状态机应用副作用,再逐条同步(各文章的 publishedAt 不同)
+          const versions = versionsOf(ids)
           const prev = get().articles
           const changed: Article[] = []
           set({
@@ -154,6 +195,7 @@ export const useArticlesStore = create<ArticlesState>()(
                   a.status === 'scheduled' && to !== 'scheduled'
                     ? undefined
                     : a.scheduledAt,
+                version: bumpVersion(a),
                 updatedAt: new Date(),
               }
               changed.push(next)
@@ -172,15 +214,17 @@ export const useArticlesStore = create<ArticlesState>()(
                 wire.scheduledAt = null
               if (to === 'published' && a.publishedAt)
                 wire.publishedAt = a.publishedAt.toISOString()
-              return articlesApi.update(a.id, wire)
+              return articlesApi.update(a.id, wire, versions[a.id])
             })
-          ).catch(() => {
-            set({ articles: prev })
-            toast.error('状态流转同步失败,已回滚')
-          })
+          ).catch((err) =>
+            handleSyncError(prev, err, '状态流转同步失败,已回滚')
+          )
         },
 
-        scheduleArticle: (id, date) =>
+        scheduleArticle: (id, date) => {
+          const target = get().articles.find((a) => a.id === id)
+          const version = target?.version
+          const wasPublished = target?.status === 'published'
           optimistic(
             () =>
               get().articles.map((a) =>
@@ -191,23 +235,27 @@ export const useArticlesStore = create<ArticlesState>()(
                       scheduledAt: date,
                       publishedAt:
                         a.status === 'published' ? a.publishedAt : undefined,
+                      version: bumpVersion(a),
                       updatedAt: new Date(),
                     }
                   : a
               ),
-            async () => {
-              const wasPublished =
-                get().articles.find((a) => a.id === id)?.status === 'published'
-              await articlesApi.update(id, {
-                status: 'scheduled',
-                scheduledAt: date.toISOString(),
-                ...(wasPublished ? {} : { publishedAt: null }),
-                updatedAt: new Date().toISOString(),
-              })
-            }
-          ),
+            () =>
+              articlesApi.update(
+                id,
+                {
+                  status: 'scheduled',
+                  scheduledAt: date.toISOString(),
+                  ...(wasPublished ? {} : { publishedAt: null }),
+                  updatedAt: new Date().toISOString(),
+                },
+                version
+              )
+          )
+        },
 
-        unscheduleArticle: (id) =>
+        unscheduleArticle: (id) => {
+          const version = get().articles.find((a) => a.id === id)?.version
           optimistic(
             () =>
               get().articles.map((a) =>
@@ -216,17 +264,23 @@ export const useArticlesStore = create<ArticlesState>()(
                       ...a,
                       status: 'draft',
                       scheduledAt: undefined,
+                      version: bumpVersion(a),
                       updatedAt: new Date(),
                     }
                   : a
               ),
             () =>
-              articlesApi.update(id, {
-                status: 'draft',
-                scheduledAt: null,
-                updatedAt: new Date().toISOString(),
-              })
-          ),
+              articlesApi.update(
+                id,
+                {
+                  status: 'draft',
+                  scheduledAt: null,
+                  updatedAt: new Date().toISOString(),
+                },
+                version
+              )
+          )
+        },
 
         recordView: (id) =>
           optimistic(

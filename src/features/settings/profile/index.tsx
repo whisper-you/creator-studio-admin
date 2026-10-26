@@ -1,5 +1,7 @@
 import { useAuthStore } from '@/stores/auth-store'
+import { Separator } from '@/components/ui/separator'
 import { ContentSection } from '../components/content-section'
+import { PasswordForm } from './password-form'
 import { ProfileForm } from './profile-form'
 
 export function SettingsProfile() {
@@ -10,7 +12,17 @@ export function SettingsProfile() {
       title='个人资料'
       desc='This is how others will see you on the site.'
     >
-      <ProfileForm key={authUserId ?? 'anon'} />
+      <div className='space-y-10'>
+        <ProfileForm key={authUserId ?? 'anon'} />
+        <div>
+          <h3 className='text-lg font-medium'>修改密码</h3>
+          <p className='text-sm text-muted-foreground'>
+            修改后当前会话自动续期,其他设备上的登录状态立即失效。
+          </p>
+          <Separator className='my-4' />
+          <PasswordForm />
+        </div>
+      </div>
     </ContentSection>
   )
 }

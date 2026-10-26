@@ -150,3 +150,69 @@ describe('useArticlesStore(server 模式:乐观更新与回滚)', () => {
     return vi.waitFor(() => expect(apiMocks.update).toHaveBeenCalled())
   })
 })
+
+describe('useArticlesStore(乐观锁:版本传递与冲突刷新)', () => {
+  beforeEach(async () => {
+    localStorage.clear()
+    vi.clearAllMocks()
+    resetStore()
+    apiMocks.listAll.mockResolvedValue([base({ id: 'ART-001', version: 3 })])
+    await useArticlesStore.getState().hydrate()
+  })
+
+  it('updateArticles:本地乐观自增版本,请求带上读取时的版本号', async () => {
+    apiMocks.update.mockResolvedValue(undefined)
+
+    useArticlesStore.getState().updateArticles(['ART-001'], { title: '改标题' })
+    expect(useArticlesStore.getState().articles[0]?.version).toBe(4)
+
+    await vi.waitFor(() => expect(apiMocks.update).toHaveBeenCalled())
+    expect(apiMocks.update).toHaveBeenCalledWith(
+      'ART-001',
+      expect.objectContaining({ title: '改标题' }),
+      3
+    )
+  })
+
+  it('updateArticles:普通失败回滚标题与版本号,不触发刷新', async () => {
+    apiMocks.update.mockRejectedValue(new Error('network'))
+
+    useArticlesStore.getState().updateArticles(['ART-001'], { title: '改标题' })
+    await vi.waitFor(() =>
+      expect(useArticlesStore.getState().articles[0]?.title).toBe('测试文章')
+    )
+    expect(useArticlesStore.getState().articles[0]?.version).toBe(3)
+    expect(apiMocks.listAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('updateArticles:409 冲突时回滚并 hydrate 服务端最新数据', async () => {
+    apiMocks.update.mockRejectedValue({ response: { status: 409 } })
+    apiMocks.listAll.mockResolvedValue([
+      base({ id: 'ART-001', title: '服务端最新', version: 9 }),
+    ])
+
+    useArticlesStore
+      .getState()
+      .updateArticles(['ART-001'], { title: '本地修改' })
+    expect(useArticlesStore.getState().articles[0]?.title).toBe('本地修改')
+
+    await vi.waitFor(() =>
+      expect(useArticlesStore.getState().articles[0]?.title).toBe('服务端最新')
+    )
+    expect(useArticlesStore.getState().articles[0]?.version).toBe(9)
+  })
+
+  it('transitionStatus:携带版本号并乐观自增', async () => {
+    apiMocks.update.mockResolvedValue(undefined)
+
+    useArticlesStore.getState().transitionStatus(['ART-001'], 'in_review')
+    expect(useArticlesStore.getState().articles[0]?.version).toBe(4)
+
+    await vi.waitFor(() => expect(apiMocks.update).toHaveBeenCalled())
+    expect(apiMocks.update).toHaveBeenCalledWith(
+      'ART-001',
+      expect.objectContaining({ status: 'in_review' }),
+      3
+    )
+  })
+})

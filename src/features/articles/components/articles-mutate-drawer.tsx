@@ -6,15 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { zhCN } from 'date-fns/locale'
 import { Calendar as CalendarIcon, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import {
-  generateSmartTitles,
-  generateSmartSummary,
-  generateSmartTags,
-  type TitleCandidate,
-} from '../utils/ai-assistant'
+import { useAuthStore } from '@/stores/auth-store'
 import { bestPublishHour } from '@/lib/best-publish-time'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -59,6 +53,12 @@ import {
   type Article,
 } from '../data/schema'
 import { useArticlesStore } from '../store'
+import {
+  generateSmartTitles,
+  generateSmartSummary,
+  generateSmartTags,
+  type TitleCandidate,
+} from '../utils/ai-assistant'
 import { MarkdownEditor } from './markdown-editor'
 
 type ArticleMutateDrawerProps = {
@@ -115,10 +115,16 @@ export function ArticlesMutateDrawer({
     : [...ARTICLE_STATUSES]
 
   if (isAuthor) {
-    allowedStatuses = allowedStatuses.filter(
+    const authorEditable = allowedStatuses.filter(
       (s) => s === 'draft' || s === 'in_review'
     )
-    if (allowedStatuses.length === 0) allowedStatuses = ['draft']
+    // 作者只能写草稿/审核中;若文章已被主编排期或发布,保留当前状态(仅可改内容)
+    allowedStatuses =
+      isUpdate && authorEditable.length === 0
+        ? [currentRow.status]
+        : authorEditable.length
+          ? authorEditable
+          : ['draft']
   }
 
   const statusOptions = allowedStatuses.map((s) => {
@@ -300,35 +306,44 @@ export function ArticlesMutateDrawer({
                           type='button'
                           variant='ghost'
                           size='sm'
-                          className='h-6 text-xs text-emerald-600 dark:text-emerald-400 gap-1 px-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                          className='h-6 gap-1 px-1.5 text-xs text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30'
                           onClick={handleGenerateAiTitles}
                         >
                           <Sparkles className='size-3' />
                           <span>AI 爆款标题</span>
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent align='end' className='w-80 p-3 space-y-2 text-xs'>
-                        <div className='flex items-center justify-between font-medium border-b pb-1.5'>
+                      <PopoverContent
+                        align='end'
+                        className='w-80 space-y-2 p-3 text-xs'
+                      >
+                        <div className='flex items-center justify-between border-b pb-1.5 font-medium'>
                           <span className='flex items-center gap-1.5 text-foreground'>
                             <Sparkles className='size-3.5 text-emerald-600' />
                             AI 爆款标题建议
                           </span>
-                          <span className='text-[10px] text-muted-foreground'>点击一键采用</span>
+                          <span className='text-[10px] text-muted-foreground'>
+                            点击一键采用
+                          </span>
                         </div>
-                        <div className='space-y-1.5 max-h-60 overflow-y-auto'>
+                        <div className='max-h-60 space-y-1.5 overflow-y-auto'>
                           {titleCandidates.map((item, idx) => (
                             <div
                               key={idx}
                               onClick={() => handleSelectTitle(item.title)}
-                              className='p-2 rounded-md border hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 cursor-pointer transition-colors space-y-1'
+                              className='cursor-pointer space-y-1 rounded-md border p-2 transition-colors hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20'
                             >
                               <div className='flex items-center justify-between'>
-                                <span className='text-[10px] px-1.5 py-0.5 rounded bg-muted font-medium text-muted-foreground'>
+                                <span className='rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground'>
                                   {item.styleLabel}
                                 </span>
                               </div>
-                              <p className='text-xs font-medium text-foreground leading-snug'>{item.title}</p>
-                              <p className='text-[11px] text-muted-foreground'>{item.description}</p>
+                              <p className='text-xs leading-snug font-medium text-foreground'>
+                                {item.title}
+                              </p>
+                              <p className='text-[11px] text-muted-foreground'>
+                                {item.description}
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -404,7 +419,7 @@ export function ArticlesMutateDrawer({
                       type='button'
                       variant='ghost'
                       size='sm'
-                      className='h-6 text-xs text-purple-600 dark:text-purple-400 gap-1 px-1.5 hover:bg-purple-50 dark:hover:bg-purple-950/30'
+                      className='h-6 gap-1 px-1.5 text-xs text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30'
                       onClick={handleAiTags}
                     >
                       <Sparkles className='size-3' />
@@ -434,7 +449,7 @@ export function ArticlesMutateDrawer({
                       type='button'
                       variant='ghost'
                       size='sm'
-                      className='h-6 text-xs text-blue-600 dark:text-blue-400 gap-1 px-1.5 hover:bg-blue-50 dark:hover:bg-blue-950/30'
+                      className='h-6 gap-1 px-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30'
                       onClick={handleAiSummary}
                     >
                       <Sparkles className='size-3' />

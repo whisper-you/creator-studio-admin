@@ -1,17 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
-import {
-  Upload,
-  Trash2,
-  CheckCircle2,
-  FileCode,
-  Loader2,
-} from 'lucide-react'
+import { Upload, Trash2, CheckCircle2, FileCode, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
-import { parseMarkdownFile, type ParsedMarkdownFile } from '../utils/parse-markdown'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -20,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Table,
   TableBody,
@@ -31,6 +25,10 @@ import {
 import { categories, statuses } from '../data/data'
 import { generateArticleIds, type Article } from '../data/schema'
 import { useArticlesStore } from '../store'
+import {
+  parseMarkdownFile,
+  type ParsedMarkdownFile,
+} from '../utils/parse-markdown'
 import { useArticles } from './articles-provider'
 
 interface ArticlesImportDialogProps {
@@ -138,23 +136,31 @@ export function ArticlesImportDialog({
       const newIds = generateArticleIds(existingArticles, parsedFiles.length)
       const now = new Date()
 
-      const newArticles: Article[] = parsedFiles.map((file, idx) => ({
-        id: newIds[idx],
-        title: file.title,
-        category: file.category,
-        status: file.status,
-        excerpt: file.excerpt,
-        content: file.content,
-        tags: file.tags,
-        platforms: file.platforms,
-        views: 0,
-        likes: 0,
-        scheduledAt: file.status === 'scheduled' ? file.scheduledAt : undefined,
-        publishedAt:
-          file.status === 'published' ? (file.publishedAt ?? now) : undefined,
-        createdAt: now,
-        updatedAt: now,
-      }))
+      // 作者导入的 Frontmatter 状态统一收敛到草稿/审核中,与状态机权限一致
+      const isAuthor = useAuthStore.getState().auth.user?.role === 'author'
+      const newArticles: Article[] = parsedFiles.map((file, idx) => {
+        const status =
+          isAuthor && !['draft', 'in_review'].includes(file.status)
+            ? 'draft'
+            : file.status
+        return {
+          id: newIds[idx],
+          title: file.title,
+          category: file.category,
+          status,
+          excerpt: file.excerpt,
+          content: file.content,
+          tags: file.tags,
+          platforms: file.platforms,
+          views: 0,
+          likes: 0,
+          scheduledAt: status === 'scheduled' ? file.scheduledAt : undefined,
+          publishedAt:
+            status === 'published' ? (file.publishedAt ?? now) : undefined,
+          createdAt: now,
+          updatedAt: now,
+        }
+      })
 
       addArticles(newArticles)
       toast.success(`已成功批量导入 ${newArticles.length} 篇文章！`)
@@ -175,14 +181,15 @@ export function ArticlesImportDialog({
         else onOpenChange(true)
       }}
     >
-      <DialogContent className='max-w-3xl max-h-[90vh] flex flex-col'>
+      <DialogContent className='flex max-h-[90vh] max-w-3xl flex-col'>
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             <FileCode className='h-5 w-5 text-primary' />
             批量导入 Markdown 文章
           </DialogTitle>
           <DialogDescription>
-            支持将包含 Frontmatter (YAML 头信息) 的本地 .md 文件拖入解析，一键批量入库。
+            支持将包含 Frontmatter (YAML 头信息) 的本地 .md
+            文件拖入解析，一键批量入库。
           </DialogDescription>
         </DialogHeader>
 
@@ -196,7 +203,7 @@ export function ArticlesImportDialog({
           onChange={handleFileInputChange}
         />
 
-        <div className='flex flex-col gap-4 flex-1 overflow-hidden'>
+        <div className='flex flex-1 flex-col gap-4 overflow-hidden'>
           {/* 拖拽投递区域 */}
           <div
             onDragOver={handleDragOver}
@@ -204,32 +211,33 @@ export function ArticlesImportDialog({
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             className={cn(
-              'border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-colors text-center',
+              'flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors',
               dragOver
                 ? 'border-primary bg-primary/10'
                 : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50'
             )}
           >
-            <div className='p-3 bg-primary/10 text-primary rounded-full mb-3'>
+            <div className='mb-3 rounded-full bg-primary/10 p-3 text-primary'>
               <Upload className='h-6 w-6' />
             </div>
-            <p className='font-medium text-sm mb-1'>
+            <p className='mb-1 text-sm font-medium'>
               点击选择文件，或直接拖拽一个/多个 .md 文件到此处
             </p>
-            <p className='text-xs text-muted-foreground max-w-md'>
-              💡 支持 Frontmatter 字段：<code className='bg-muted px-1 rounded'>title</code>、
-              <code className='bg-muted px-1 rounded'>category</code>、
-              <code className='bg-muted px-1 rounded'>tags</code>、
-              <code className='bg-muted px-1 rounded'>status</code>、
-              <code className='bg-muted px-1 rounded'>platforms</code> 等；
-              无 Frontmatter 时自动从首个一级标题提炼。
+            <p className='max-w-md text-xs text-muted-foreground'>
+              💡 支持 Frontmatter 字段：
+              <code className='rounded bg-muted px-1'>title</code>、
+              <code className='rounded bg-muted px-1'>category</code>、
+              <code className='rounded bg-muted px-1'>tags</code>、
+              <code className='rounded bg-muted px-1'>status</code>、
+              <code className='rounded bg-muted px-1'>platforms</code> 等； 无
+              Frontmatter 时自动从首个一级标题提炼。
             </p>
           </div>
 
           {/* 解析列表预览 */}
           {parsedFiles.length > 0 && (
-            <div className='flex flex-col flex-1 overflow-hidden border rounded-md'>
-              <div className='flex items-center justify-between px-3 py-2 bg-muted/40 border-b text-xs text-muted-foreground'>
+            <div className='flex flex-1 flex-col overflow-hidden rounded-md border'>
+              <div className='flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-xs text-muted-foreground'>
                 <span className='font-medium text-foreground'>
                   待导入文章列表（共 {parsedFiles.length} 篇）
                 </span>
@@ -237,7 +245,7 @@ export function ArticlesImportDialog({
                   <Button
                     variant='ghost'
                     size='sm'
-                    className='h-7 text-xs px-2'
+                    className='h-7 px-2 text-xs'
                     onClick={() => fileInputRef.current?.click()}
                   >
                     继续添加
@@ -245,7 +253,7 @@ export function ArticlesImportDialog({
                   <Button
                     variant='ghost'
                     size='sm'
-                    className='h-7 text-xs px-2 text-destructive hover:text-destructive'
+                    className='h-7 px-2 text-xs text-destructive hover:text-destructive'
                     onClick={handleClearAll}
                   >
                     清空列表
@@ -278,15 +286,15 @@ export function ArticlesImportDialog({
                         <TableRow key={`${item.fileName}-${idx}`}>
                           <TableCell className='py-2'>
                             <div className='flex flex-col'>
-                              <span className='font-medium text-sm line-clamp-1'>
+                              <span className='line-clamp-1 text-sm font-medium'>
                                 {item.title}
                               </span>
-                              <span className='text-xs text-muted-foreground flex items-center gap-1.5'>
+                              <span className='flex items-center gap-1.5 text-xs text-muted-foreground'>
                                 <span>{item.fileName}</span>
                                 {item.hasFrontmatter && (
                                   <Badge
                                     variant='outline'
-                                    className='text-[10px] h-4 px-1 text-emerald-600 border-emerald-300'
+                                    className='h-4 border-emerald-300 px-1 text-[10px] text-emerald-600'
                                   >
                                     Frontmatter
                                   </Badge>
@@ -308,12 +316,12 @@ export function ArticlesImportDialog({
                             {item.wordCount} 字
                           </TableCell>
                           <TableCell className='py-2'>
-                            <div className='flex flex-wrap gap-1 max-w-[120px]'>
+                            <div className='flex max-w-[120px] flex-wrap gap-1'>
                               {item.tags.slice(0, 2).map((t) => (
                                 <Badge
                                   key={t}
                                   variant='secondary'
-                                  className='text-[10px] px-1 py-0'
+                                  className='px-1 py-0 text-[10px]'
                                 >
                                   {t}
                                 </Badge>
@@ -345,7 +353,7 @@ export function ArticlesImportDialog({
           )}
         </div>
 
-        <DialogFooter className='gap-2 sm:gap-0 mt-4'>
+        <DialogFooter className='mt-4 gap-2 sm:gap-0'>
           <Button
             variant='outline'
             onClick={closeDialog}

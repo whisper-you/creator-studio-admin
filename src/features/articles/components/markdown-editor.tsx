@@ -14,8 +14,6 @@ import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
 import { materialsApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { downloadFile } from '../utils/export-article'
-import { copyFormattedMarkdown, type FormatterTheme } from '../utils/wechat-formatter'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -25,6 +23,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { downloadFile } from '../utils/export-article'
+import {
+  copyFormattedMarkdown,
+  type FormatterTheme,
+} from '../utils/wechat-formatter'
 
 type MarkdownEditorProps = {
   value: string
@@ -35,6 +38,14 @@ type MarkdownEditorProps = {
 }
 
 type PreviewDevice = 'web' | 'wechat' | 'zhihu'
+
+const ACCEPTED_IMAGE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 /**
  * 将 File 对象转为 Base64 Data URL
@@ -65,8 +76,12 @@ export function MarkdownEditor({
    * 将图片上传至本地图床，并插入到当前 Markdown 内容中
    */
   const handleUploadAndInsertImage = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('只能上传图片格式的文件')
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error('仅支持 PNG / JPEG / WebP / GIF 格式图片')
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error('图片不能超过 5MB')
       return
     }
 
@@ -195,7 +210,7 @@ export function MarkdownEditor({
           <input
             type='file'
             ref={fileInputRef}
-            accept='image/*'
+            accept='image/png,image/jpeg,image/webp,image/gif'
             className='hidden'
             onChange={(e) => {
               const file = e.target.files?.[0]
@@ -207,7 +222,7 @@ export function MarkdownEditor({
             type='button'
             variant='outline'
             size='sm'
-            className='h-7 text-xs font-normal gap-1 text-muted-foreground hover:text-foreground'
+            className='h-7 gap-1 text-xs font-normal text-muted-foreground hover:text-foreground'
             disabled={isUploading}
             onClick={() => fileInputRef.current?.click()}
             title='上传或粘贴图片 (支持直接 Ctrl+V)'
@@ -227,7 +242,7 @@ export function MarkdownEditor({
                 type='button'
                 variant='outline'
                 size='sm'
-                className='h-7 text-xs font-normal gap-1 text-muted-foreground hover:text-foreground'
+                className='h-7 gap-1 text-xs font-normal text-muted-foreground hover:text-foreground'
               >
                 {copiedTheme ? (
                   <Check className='size-3.5 text-green-600' />
@@ -267,7 +282,7 @@ export function MarkdownEditor({
             type='button'
             variant='ghost'
             size='sm'
-            className='h-7 text-xs font-normal gap-1 text-muted-foreground hover:text-foreground'
+            className='h-7 gap-1 text-xs font-normal text-muted-foreground hover:text-foreground'
             onClick={handleExportMd}
             title='导出当前 Markdown 内容'
           >
@@ -291,8 +306,14 @@ export function MarkdownEditor({
           rows={rows}
           className='resize-y font-mono text-sm leading-relaxed'
         />
-        <div className='flex items-center justify-between text-[11px] text-muted-foreground px-1'>
-          <span>💡 小技巧：直接截图后在此处按 <kbd className='px-1 py-0.5 bg-muted rounded border text-[10px]'>Ctrl+V</kbd> 可快速贴图</span>
+        <div className='flex items-center justify-between px-1 text-[11px] text-muted-foreground'>
+          <span>
+            💡 小技巧：直接截图后在此处按{' '}
+            <kbd className='rounded border bg-muted px-1 py-0.5 text-[10px]'>
+              Ctrl+V
+            </kbd>{' '}
+            可快速贴图
+          </span>
           <span>共 {value.length} 字</span>
         </div>
       </TabsContent>
@@ -300,15 +321,17 @@ export function MarkdownEditor({
       <TabsContent value='preview' className='mt-2 space-y-3'>
         {/* 多端预览设备切换 */}
         <div className='flex items-center justify-between border-b pb-2 text-xs'>
-          <span className='text-muted-foreground font-medium'>终端排版效果：</span>
-          <div className='flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg'>
+          <span className='font-medium text-muted-foreground'>
+            终端排版效果：
+          </span>
+          <div className='flex items-center gap-1 rounded-lg bg-muted/60 p-0.5'>
             <button
               type='button'
               onClick={() => setPreviewDevice('web')}
               className={cn(
-                'flex items-center gap-1 px-2.5 py-1 rounded-md transition-colors',
+                'flex items-center gap-1 rounded-md px-2.5 py-1 transition-colors',
                 previewDevice === 'web'
-                  ? 'bg-background shadow-xs text-foreground font-medium'
+                  ? 'bg-background font-medium text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -319,9 +342,9 @@ export function MarkdownEditor({
               type='button'
               onClick={() => setPreviewDevice('wechat')}
               className={cn(
-                'flex items-center gap-1 px-2.5 py-1 rounded-md transition-colors',
+                'flex items-center gap-1 rounded-md px-2.5 py-1 transition-colors',
                 previewDevice === 'wechat'
-                  ? 'bg-background shadow-xs text-foreground font-medium text-emerald-600'
+                  ? 'bg-background font-medium text-emerald-600 text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -332,9 +355,9 @@ export function MarkdownEditor({
               type='button'
               onClick={() => setPreviewDevice('zhihu')}
               className={cn(
-                'flex items-center gap-1 px-2.5 py-1 rounded-md transition-colors',
+                'flex items-center gap-1 rounded-md px-2.5 py-1 transition-colors',
                 previewDevice === 'zhihu'
-                  ? 'bg-background shadow-xs text-foreground font-medium text-blue-600'
+                  ? 'bg-background font-medium text-blue-600 text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -345,30 +368,34 @@ export function MarkdownEditor({
         </div>
 
         {/* 预览容器 */}
-        <div className='flex justify-center w-full min-h-64 py-2'>
+        <div className='flex min-h-64 w-full justify-center py-2'>
           {previewDevice === 'wechat' ? (
             /* 仿微信公众号手机容器 */
-            <div className='w-full max-w-[390px] rounded-3xl border-4 border-slate-300 dark:border-slate-700 bg-background shadow-xl overflow-hidden p-4 space-y-3'>
-              <div className='text-center border-b pb-2'>
-                <div className='w-12 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-2' />
-                <h3 className='font-bold text-base text-start text-foreground'>
+            <div className='w-full max-w-[390px] space-y-3 overflow-hidden rounded-3xl border-4 border-slate-300 bg-background p-4 shadow-xl dark:border-slate-700'>
+              <div className='border-b pb-2 text-center'>
+                <div className='mx-auto mb-2 h-1 w-12 rounded-full bg-muted-foreground/30' />
+                <h3 className='text-start text-base font-bold text-foreground'>
                   {articleTitle || '文章标题'}
                 </h3>
-                <div className='flex items-center gap-2 text-[11px] text-muted-foreground mt-1'>
-                  <span className='text-emerald-600 font-medium'>创作者工坊</span>
+                <div className='mt-1 flex items-center gap-2 text-[11px] text-muted-foreground'>
+                  <span className='font-medium text-emerald-600'>
+                    创作者工坊
+                  </span>
                   <span>{new Date().toLocaleDateString('zh-CN')}</span>
                 </div>
               </div>
-              <div className='prose prose-sm max-w-none dark:prose-invert text-[15px] leading-relaxed'>
+              <div className='prose prose-sm max-w-none text-[15px] leading-relaxed dark:prose-invert'>
                 {value.trim() ? (
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {value}
                   </ReactMarkdown>
                 ) : (
-                  <p className='text-muted-foreground text-center py-8'>(暂无正文内容)</p>
+                  <p className='py-8 text-center text-muted-foreground'>
+                    (暂无正文内容)
+                  </p>
                 )}
               </div>
-              <div className='border-t pt-3 flex justify-between items-center text-xs text-muted-foreground'>
+              <div className='flex items-center justify-between border-t pt-3 text-xs text-muted-foreground'>
                 <span>阅读 10万+</span>
                 <div className='flex items-center gap-3'>
                   <span>👍 点赞</span>
@@ -378,19 +405,21 @@ export function MarkdownEditor({
             </div>
           ) : previewDevice === 'zhihu' ? (
             /* 仿知乎专栏容器 */
-            <div className='w-full max-w-2xl rounded-lg border bg-card p-6 shadow-sm space-y-4'>
+            <div className='w-full max-w-2xl space-y-4 rounded-lg border bg-card p-6 shadow-sm'>
               <div className='border-b pb-3'>
-                <span className='text-xs font-semibold text-blue-600 uppercase tracking-wider'>
+                <span className='text-xs font-semibold tracking-wider text-blue-600 uppercase'>
                   知乎专栏 · 技术写作
                 </span>
-                <h2 className='text-xl font-bold mt-1 text-foreground'>
+                <h2 className='mt-1 text-xl font-bold text-foreground'>
                   {articleTitle || '文章标题'}
                 </h2>
-                <div className='flex items-center gap-2 mt-2 text-xs text-muted-foreground'>
-                  <div className='size-6 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-[10px]'>
+                <div className='mt-2 flex items-center gap-2 text-xs text-muted-foreground'>
+                  <div className='flex size-6 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white'>
                     创
                   </div>
-                  <span className='font-medium text-foreground'>独立创作者</span>
+                  <span className='font-medium text-foreground'>
+                    独立创作者
+                  </span>
                   <span>· 发布于知乎</span>
                 </div>
               </div>
@@ -408,7 +437,7 @@ export function MarkdownEditor({
             /* 标准 Web 预览 */
             <div
               className={cn(
-                'prose prose-sm max-w-none w-full rounded-md border p-4 dark:prose-invert bg-card/50',
+                'prose prose-sm w-full max-w-none rounded-md border bg-card/50 p-4 dark:prose-invert',
                 'min-h-32'
               )}
             >

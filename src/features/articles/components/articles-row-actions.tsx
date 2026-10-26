@@ -4,8 +4,6 @@ import { Download, Printer, Send, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { distributionApi } from '@/lib/api'
-import { copyFormattedMarkdown, type FormatterTheme } from '../utils/wechat-formatter'
-import { exportArticleAsMarkdown, printArticle } from '../utils/export-article'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -21,6 +19,11 @@ import {
 import { statusMeta } from '../data/data'
 import { statusFlow, type Article } from '../data/schema'
 import { useArticlesStore } from '../store'
+import { exportArticleAsMarkdown, printArticle } from '../utils/export-article'
+import {
+  copyFormattedMarkdown,
+  type FormatterTheme,
+} from '../utils/wechat-formatter'
 import { useArticles } from './articles-provider'
 
 type ArticlesRowActionsProps<TData> = {
@@ -121,11 +124,13 @@ export function ArticlesRowActions<TData>({
 
         <DropdownMenuSeparator />
 
-        {/* 分发到各平台 */}
-        <DropdownMenuItem onClick={handleDispatchChannels} className='gap-2'>
-          <Send className='size-3.5 text-blue-500' />
-          <span>分发到各渠道 (Webhook)</span>
-        </DropdownMenuItem>
+        {/* 分发到各平台(作者无分发权限) */}
+        {!isAuthor && (
+          <DropdownMenuItem onClick={handleDispatchChannels} className='gap-2'>
+            <Send className='size-3.5 text-blue-500' />
+            <span>分发到各渠道 (Webhook)</span>
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className='gap-2'>

@@ -89,6 +89,17 @@ export const authApi = {
   async updateRole(role: 'admin' | 'editor' | 'author') {
     return meSchema.parse((await api.patch('/auth/me', { role })).data)
   },
+  /** 改密成功后旧 token 全部失效,服务端返回当前会话的新 token */
+  async changePassword(currentPassword: string, newPassword: string) {
+    return loginSchema.parse(
+      (
+        await api.post('/auth/change-password', {
+          currentPassword,
+          newPassword,
+        })
+      ).data
+    )
+  },
 }
 
 export const articlesApi = {
@@ -122,15 +133,27 @@ export const articlesApi = {
   /**
    * 部分更新。patch 里显式传 null 表示清空日期字段;
    * undefined 的字段不会出现在 JSON 里,服务端会跳过它们。
+   * 传 version 时启用乐观锁:版本不一致会返回 409。
    */
-  async update(id: string, patch: Record<string, unknown>): Promise<void> {
-    await api.patch(`/articles/${id}`, patch)
+  async update(
+    id: string,
+    patch: Record<string, unknown>,
+    version?: number
+  ): Promise<void> {
+    await api.patch(
+      `/articles/${id}`,
+      version === undefined ? patch : { ...patch, version }
+    )
   },
   async updateBulk(
     ids: string[],
-    patch: Record<string, unknown>
+    patch: Record<string, unknown>,
+    versions?: Record<string, number>
   ): Promise<void> {
-    await api.patch('/articles/bulk', { ids, patch })
+    await api.patch(
+      '/articles/bulk',
+      versions ? { ids, patch, versions } : { ids, patch }
+    )
   },
   async delete(ids: string[]): Promise<void> {
     if (ids.length === 1) await api.delete(`/articles/${ids[0]}`)
@@ -184,6 +207,43 @@ const meSchema = z.object({
   role: roleSchema,
 })
 
+const auditLogSchema = z.object({
+  id: z.number(),
+  actorId: z.string().nullable().optional(),
+  actorEmail: z.string().nullable().optional(),
+  actorRole: z.string().nullable().optional(),
+  action: z.string(),
+  entityType: z.string(),
+  entityId: z.string().nullable().optional(),
+  detail: z.unknown().nullable().optional(),
+  createdAt: z.string(),
+})
+
+const auditLogListSchema = z.object({
+  data: z.array(auditLogSchema),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
+})
+
+export type AuditLogItem = z.infer<typeof auditLogSchema>
+
+export const auditApi = {
+  async list(
+    params: {
+      page?: number
+      pageSize?: number
+      action?: string
+      entityType?: string
+      actor?: string
+    } = {}
+  ) {
+    return auditLogListSchema.parse(
+      (await api.get('/audit-logs', { params })).data
+    )
+  },
+}
+
 const commentListSchema = z.object({
   data: z.array(
     z.object({
@@ -216,8 +276,9 @@ const distributionLogSchema = z.object({
   ),
 })
 
-export type DistributionLogItem =
-  z.infer<typeof distributionLogSchema>['data'][number]
+export type DistributionLogItem = z.infer<
+  typeof distributionLogSchema
+>['data'][number]
 
 export const channelsApi = {
   async list() {
@@ -236,7 +297,8 @@ export const channelsApi = {
       autoPush?: boolean
     }
   ) {
-    return (await api.patch(`/channels/${encodeURIComponent(name)}`, patch)).data
+    return (await api.patch(`/channels/${encodeURIComponent(name)}`, patch))
+      .data
   },
   async testWebhook(name: string, webhookUrl?: string) {
     const res = await api.post<{
@@ -263,7 +325,10 @@ export const distributionApi = {
     ok: boolean
     results: Array<{ channel: string; status: string; message: string }>
   }> {
-    const res = await api.post('/distribution/dispatch', { articleId, channels })
+    const res = await api.post('/distribution/dispatch', {
+      articleId,
+      channels,
+    })
     return res.data
   },
 }

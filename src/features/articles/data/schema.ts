@@ -44,6 +44,8 @@ export const articleSchema = z.object({
   likes: z.number(),
   scheduledAt: optionalDate,
   publishedAt: optionalDate,
+  // 服务端乐观锁版本号;离线演示数据没有该字段
+  version: z.number().int().positive().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 })

@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { toast } from 'sonner'
-import { parseMarkdownFile } from './utils/parse-markdown'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -12,6 +11,7 @@ import { ArticlesDialogs } from './components/articles-dialogs'
 import { ArticlesPrimaryButtons } from './components/articles-primary-buttons'
 import { ArticlesProvider, useArticles } from './components/articles-provider'
 import { ArticlesTable } from './components/articles-table'
+import { parseMarkdownFile } from './utils/parse-markdown'
 
 function ArticlesView() {
   const { setOpen, setInitialImport } = useArticles()
@@ -64,7 +64,7 @@ function ArticlesView() {
 
   return (
     <div
-      className='relative flex flex-1 flex-col min-h-0'
+      className='relative flex min-h-0 flex-1 flex-col'
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -72,14 +72,14 @@ function ArticlesView() {
     >
       {/* 页面全局拖拽释放遮罩 */}
       {isDraggingOverPage && (
-        <div className='pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/85 backdrop-blur-sm border-2 border-dashed border-primary m-2 rounded-xl text-center animate-in fade-in zoom-in-95 duration-150'>
-          <div className='p-4 bg-primary/10 text-primary rounded-full mb-3 shadow-lg'>
+        <div className='pointer-events-none absolute inset-0 z-50 m-2 flex animate-in flex-col items-center justify-center rounded-xl border-2 border-dashed border-primary bg-background/85 text-center backdrop-blur-sm duration-150 zoom-in-95 fade-in'>
+          <div className='mb-3 rounded-full bg-primary/10 p-4 text-primary shadow-lg'>
             <Upload className='h-10 w-10 animate-bounce' />
           </div>
           <h3 className='text-xl font-bold tracking-tight'>
             松开鼠标，立即批量导入 Markdown 文章
           </h3>
-          <p className='text-sm text-muted-foreground mt-1'>
+          <p className='mt-1 text-sm text-muted-foreground'>
             自动解析 Frontmatter YAML 头信息并生成待导入预览
           </p>
         </div>

@@ -99,7 +99,8 @@ function ChannelWebhookForm({
               配置「{channel.name}」分发与 Webhook
             </DialogTitle>
             <DialogDescription className='text-xs'>
-              设置发布凭证与自动化推送回调，支持自建博客、飞书/钉钉机器人或 GitHub Actions。
+              设置发布凭证与自动化推送回调，支持自建博客、飞书/钉钉机器人或
+              GitHub Actions。
             </DialogDescription>
           </div>
         </div>
@@ -118,11 +119,16 @@ function ChannelWebhookForm({
 
         <div className='space-y-1.5'>
           <div className='flex items-center justify-between'>
-            <Label htmlFor='channel-webhook' className='flex items-center gap-1'>
+            <Label
+              htmlFor='channel-webhook'
+              className='flex items-center gap-1'
+            >
               <Webhook className='size-3.5 text-muted-foreground' />
               <span>自动化推送 Webhook URL</span>
             </Label>
-            <span className='text-[11px] text-muted-foreground'>留空则走内置模拟通道</span>
+            <span className='text-[11px] text-muted-foreground'>
+              留空则走内置模拟通道
+            </span>
           </div>
           <Input
             id='channel-webhook'
@@ -135,7 +141,7 @@ function ChannelWebhookForm({
 
         <div className='flex items-center justify-between rounded-lg border p-3'>
           <div className='space-y-0.5'>
-            <Label htmlFor='auto-push' className='font-medium cursor-pointer'>
+            <Label htmlFor='auto-push' className='cursor-pointer font-medium'>
               自动同步分发
             </Label>
             <p className='text-xs text-muted-foreground'>
@@ -151,22 +157,24 @@ function ChannelWebhookForm({
 
         {testResult && (
           <div
-            className={`rounded-md p-2.5 text-xs flex items-start gap-2 border ${
+            className={`flex items-start gap-2 rounded-md border p-2.5 text-xs ${
               testResult.ok
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                : 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300'
             }`}
           >
-            <CheckCircle2 className='size-4 shrink-0 mt-0.5' />
+            <CheckCircle2 className='mt-0.5 size-4 shrink-0' />
             <div>
-              <p className='font-semibold'>{testResult.ok ? '连通性正常' : '连通异常'}</p>
+              <p className='font-semibold'>
+                {testResult.ok ? '连通性正常' : '连通异常'}
+              </p>
               <p className='mt-0.5 opacity-90'>{testResult.message}</p>
             </div>
           </div>
         )}
       </div>
 
-      <DialogFooter className='flex sm:justify-between items-center gap-2'>
+      <DialogFooter className='flex items-center gap-2 sm:justify-between'>
         <Button
           type='button'
           variant='outline'
@@ -184,12 +192,7 @@ function ChannelWebhookForm({
         </Button>
 
         <div className='flex gap-2'>
-          <Button
-            type='button'
-            variant='ghost'
-            size='sm'
-            onClick={onClose}
-          >
+          <Button type='button' variant='ghost' size='sm' onClick={onClose}>
             取消
           </Button>
           <Button
