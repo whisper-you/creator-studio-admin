@@ -9,14 +9,16 @@ import { requireAuth, requireRole } from './auth.js'
 export const channelsRouter = Router()
 channelsRouter.use(requireAuth)
 
-channelsRouter.get('/', (_req, res) => {
+channelsRouter.get('/', (req, res) => {
+  // Webhook 地址可能内含签名密钥,只对可配置渠道的角色返回
+  const canManage = req.user?.role === 'admin' || req.user?.role === 'editor'
   const rows = db.prepare('SELECT * FROM channels ORDER BY rowid').all()
   res.json({
     data: rows.map((r) => ({
       name: r.name,
       account: r.account ?? undefined,
       connected: !!r.connected,
-      webhookUrl: r.webhook_url ?? undefined,
+      webhookUrl: canManage ? (r.webhook_url ?? undefined) : undefined,
       autoPush: !!r.auto_push,
     })),
   })

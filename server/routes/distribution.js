@@ -20,6 +20,8 @@ distributionRouter.get('/logs', (req, res) => {
     typeof req.query.articleId === 'string' ? req.query.articleId : null
   const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100)
   const rows = getDistributionLogs(articleId, limit)
+  // 目标地址可能包含 Webhook 密钥,只对可配置渠道的角色返回
+  const canManage = req.user?.role === 'admin' || req.user?.role === 'editor'
 
   res.json({
     data: rows.map((r) => ({
@@ -27,7 +29,7 @@ distributionRouter.get('/logs', (req, res) => {
       articleId: r.article_id,
       articleTitle: r.article_title,
       channelName: r.channel_name,
-      targetUrl: r.target_url,
+      targetUrl: canManage ? r.target_url : undefined,
       status: r.status,
       responseCode: r.response_code,
       message: r.message,

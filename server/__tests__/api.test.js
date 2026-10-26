@@ -697,6 +697,48 @@ describe('渠道接口', () => {
     })
     expect(probe.status).toBe(400)
   })
+
+  it('作者无权读取渠道的 Webhook 地址', async () => {
+    const name = encodeURIComponent('个人网站')
+    const register = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'channel-author@test.dev',
+        password: 'password123',
+        name: '渠道作者',
+      }),
+    })
+    const authorToken = (await register.json()).accessToken
+
+    await fetch(`${baseUrl}/api/channels/${name}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ webhookUrl: 'https://example.com/secret-token' }),
+    })
+
+    const asAuthor = await (
+      await fetch(`${baseUrl}/api/channels`, {
+        headers: authed(authorToken),
+      })
+    ).json()
+    const authorRow = asAuthor.data.find((row) => row.name === '个人网站')
+    expect(authorRow.connected).toBeDefined()
+    expect(authorRow.webhookUrl).toBeUndefined()
+
+    const asAdmin = await (
+      await fetch(`${baseUrl}/api/channels`, { headers: authed(token) })
+    ).json()
+    expect(asAdmin.data.find((row) => row.name === '个人网站').webhookUrl).toBe(
+      'https://example.com/secret-token'
+    )
+
+    await fetch(`${baseUrl}/api/channels/${name}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ webhookUrl: null }),
+    })
+  })
 })
 
 describe('素材与统计接口', () => {
@@ -1368,6 +1410,28 @@ describe('第三梯队: Webhook、多渠道分发与 RBAC', () => {
     const logBody = await logRes.json()
     expect(logBody.data.length).toBeGreaterThan(0)
     expect(logBody.data[0].articleId).toBe('ART-001')
+    expect(logBody.data.some((log) => log.targetUrl)).toBe(true)
+  })
+
+  it('分发日志的目标地址仅对 admin/editor 返回', async () => {
+    const register = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'log-author@test.dev',
+        password: 'password123',
+        name: '日志作者',
+      }),
+    })
+    const authorToken = (await register.json()).accessToken
+
+    const asAuthor = await (
+      await fetch(`${baseUrl}/api/distribution/logs?articleId=ART-001`, {
+        headers: authed(authorToken),
+      })
+    ).json()
+    expect(asAuthor.data.length).toBeGreaterThan(0)
+    expect(asAuthor.data.every((log) => log.targetUrl === undefined)).toBe(true)
   })
 
   it('PATCH /api/auth/me 支持切换用户角色 (RBAC: editor / author / admin)', async () => {

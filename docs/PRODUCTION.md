@@ -107,6 +107,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 
 - 已绑定且填写 Webhook URL 的渠道会收到真实 `POST`（超时 6 秒），结果写入 `distribution_logs`。
 - Webhook 地址在保存、测试与分发时都会校验：仅允许 http/https、禁止内嵌账号密码，始终拒绝云元数据（如 `169.254.169.254`）与链路本地地址；`WEBHOOK_BLOCK_PRIVATE=true` 时额外拒绝本机/私网/内网域名。请求不自动跟随重定向，避免跳转到内部目标。
+- 渠道列表中的 `webhookUrl` 与分发日志中的 `targetUrl` 只对 `admin` / `editor` 返回，作者角色只能看到渠道名称、连接状态与分发结果。
 - 未配置 Webhook 的渠道走**模拟分发**，日志状态为 `simulated`，并不会真的发布到微信、知乎等平台。
 - 没有重试、没有签名校验、没有幂等键、没有失败告警。
 

@@ -9,7 +9,7 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express)
 ![SQLite](https://img.shields.io/badge/SQLite-node:sqlite-003B57?style=flat-square&logo=sqlite)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
-![Tests](https://img.shields.io/badge/Tests-146%20Passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-148%20Passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 <p align="center">
@@ -89,7 +89,7 @@
 - **真实 Webhook 外链广播**：
   - 支持为各渠道绑定真实 Webhook URL（如部署在 Vercel/Netlify 的自建博客、GitHub Actions Repository Dispatch、飞书/企业微信/钉钉群推送机器人）。
   - 发布文章时自动通过标准 JSON Payload 广播包含文章 ID、标题、摘要、标签与正文的数据包。
-  - 服务端校验 Webhook 地址：仅允许 http/https、禁止内嵌凭据，始终拦截云元数据与链路本地地址；可选 `WEBHOOK_BLOCK_PRIVATE=true` 阻断私网，且不自动跟随重定向。
+  - 服务端校验 Webhook 地址：仅允许 http/https、禁止内嵌凭据，始终拦截云元数据与链路本地地址；可选 `WEBHOOK_BLOCK_PRIVATE=true` 阻断私网，且不自动跟随重定向。Webhook 地址与分发目标仅对 admin/editor 可见。
 - **内置渠道拟真分发**：
   - 针对微信、知乎、掘金、小红书等未配置外部 Hook 的渠道，提供高保真模拟分发逻辑（拟真网络耗时、生成模拟外链回执）。
 - **连通性探针与分发日志追踪**：
@@ -376,7 +376,7 @@ server {
 项目实施严苛的代码质量与自动化测试工程规范：
 
 ```bash
-# 执行后端 API 集成测试 (89 个用例覆盖登录鉴权、会话续期与登出、登录设备管理、改密吊销、管理员角色调整/停用启用/重置密码/强制下线、文章 CRUD/乐观锁、图床上传安全、Webhook 地址校验、RBAC、状态机、审计与自动分发)
+# 执行后端 API 集成测试 (91 个用例覆盖登录鉴权、会话续期与登出、登录设备管理、改密吊销、管理员角色调整/停用启用/重置密码/强制下线、文章 CRUD/乐观锁、图床上传安全、Webhook 地址校验与字段可见性、RBAC、状态机、审计与自动分发)
 pnpm test:server
 
 # 执行全量代码静态规范检查 (ESLint 9)
@@ -388,7 +388,7 @@ pnpm build
 
 当前测试运行结果：
 
-- `server/__tests__/api.test.js`：89 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、登录设备列表与撤销、管理员角色调整/停用启用/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、Webhook 地址校验、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
+- `server/__tests__/api.test.js`：91 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、登录设备列表与撤销、管理员角色调整/停用启用/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、Webhook 地址校验与字段可见性、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
 - `server/__tests__/webhook-url.test.js`：4 个 Webhook 协议、凭据、云元数据/链路本地与私网拦截测试全部通过。
 - `server/__tests__/jwt-secret.test.js`：8 个 JWT 密钥解析与生产启动校验测试全部通过。
 - `server/__tests__/seed-policy.test.js`：12 个种子数据策略、管理员引导与生产初始化测试全部通过。
@@ -398,7 +398,7 @@ pnpm build
 - `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
 - `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
 - `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
-- **全套 146 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
+- **全套 148 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
 
 ---
 
