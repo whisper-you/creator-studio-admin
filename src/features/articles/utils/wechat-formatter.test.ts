@@ -20,7 +20,8 @@ describe('markdownToWeChatHtml', () => {
   })
 
   it('正确解析代码块与行内代码', () => {
-    const md = '这里有 `const a = 1` 行内代码\n\n```js\nconsole.log("hello world")\n```'
+    const md =
+      '这里有 `const a = 1` 行内代码\n\n```js\nconsole.log("hello world")\n```'
     const html = markdownToWeChatHtml(md)
     expect(html).toContain('<code style="background-color: #f3f4f6')
     expect(html).toContain('console.log(&quot;hello world&quot;)')

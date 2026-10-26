@@ -30,7 +30,7 @@ export function SignIn() {
             </Link>
             <br />
             <span className='text-xs'>
-              演示账号:creator@studio.dev / creator123(需运行 pnpm server
+              演示账号:creator@studio.dev / creator123(需运行 pnpm run server
               启动后端;未启动时任意邮箱密码可进入离线演示模式)
             </span>
           </CardDescription>

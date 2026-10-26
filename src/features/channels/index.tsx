@@ -26,8 +26,8 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-import { channels as seedChannels, type Channel } from './data/channels'
 import { ChannelWebhookDialog } from './components/channel-webhook-dialog'
+import { channels as seedChannels, type Channel } from './data/channels'
 
 const route = getRouteApi('/_authenticated/channels/')
 
@@ -226,7 +226,7 @@ export function Channels() {
             return (
               <li
                 key={channel.name}
-                className='rounded-lg border p-4 hover:shadow-md transition-shadow relative flex flex-col justify-between'
+                className='relative flex flex-col justify-between rounded-lg border p-4 transition-shadow hover:shadow-md'
               >
                 <div>
                   <div className='mb-4 flex items-center justify-between'>
@@ -270,22 +270,22 @@ export function Channels() {
                         </span>
                       )}
                     </h2>
-                    <p className='line-clamp-2 text-gray-500 text-xs leading-relaxed'>
+                    <p className='line-clamp-2 text-xs leading-relaxed text-gray-500'>
                       {channel.desc}
                     </p>
                   </div>
                 </div>
 
                 {connected && (
-                  <div className='mt-4 pt-2.5 border-t flex items-center justify-between text-[11px] text-muted-foreground'>
+                  <div className='mt-4 flex items-center justify-between border-t pt-2.5 text-[11px] text-muted-foreground'>
                     <div className='flex items-center gap-1.5'>
                       <Webhook className='size-3 text-muted-foreground' />
-                      <span className='truncate max-w-36'>
+                      <span className='max-w-36 truncate'>
                         {channel.webhookUrl ? '已配置 Webhook' : '模拟分发通道'}
                       </span>
                     </div>
                     {channel.autoPush ? (
-                      <span className='flex items-center gap-0.5 text-emerald-600 font-medium'>
+                      <span className='flex items-center gap-0.5 font-medium text-emerald-600'>
                         <Zap className='size-3' />
                         自动分发
                       </span>

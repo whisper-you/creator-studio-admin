@@ -108,7 +108,10 @@ export function markdownToWeChatHtml(
     if (trimmed.startsWith('__CODE_BLOCK_') && trimmed.endsWith('__')) {
       flushBlockquote()
       flushList()
-      const idx = Number.parseInt(trimmed.replace(/__CODE_BLOCK_(\d+)__/, '$1'), 10)
+      const idx = Number.parseInt(
+        trimmed.replace(/__CODE_BLOCK_(\d+)__/, '$1'),
+        10
+      )
       if (!Number.isNaN(idx) && codeBlocks[idx]) {
         htmlParts.push(codeBlocks[idx])
       }

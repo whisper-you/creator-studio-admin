@@ -35,28 +35,28 @@ export function TrendChart() {
   return (
     <div className='space-y-3'>
       {/* 周期切换与图例 */}
-      <div className='flex items-center justify-between text-xs px-1'>
+      <div className='flex items-center justify-between px-1 text-xs'>
         <div className='flex items-center gap-3'>
           <span className='flex items-center gap-1.5'>
             <span className='size-2.5 rounded-full bg-primary' />
-            <span className='text-muted-foreground font-medium'>阅读量</span>
+            <span className='font-medium text-muted-foreground'>阅读量</span>
           </span>
           <span className='flex items-center gap-1.5'>
             <span className='size-2.5 rounded-full bg-[var(--color-chart-2)]' />
-            <span className='text-muted-foreground font-medium'>点赞数</span>
+            <span className='font-medium text-muted-foreground'>点赞数</span>
           </span>
         </div>
 
-        <div className='flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg'>
+        <div className='flex items-center gap-1 rounded-lg bg-muted/60 p-0.5'>
           {[7, 30, 90].map((d) => (
             <button
               key={d}
               type='button'
               onClick={() => setDays(d)}
               className={cn(
-                'px-2.5 py-1 rounded-md transition-colors text-xs',
+                'rounded-md px-2.5 py-1 text-xs transition-colors',
                 days === d
-                  ? 'bg-background shadow-xs font-semibold text-foreground'
+                  ? 'bg-background font-semibold text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >

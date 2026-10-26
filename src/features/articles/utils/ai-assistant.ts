@@ -57,28 +57,30 @@ const COMMON_TECH_KEYWORDS: Array<{ keyword: string; tag: string }> = [
 export function cleanMarkdownText(markdown: string): string {
   if (!markdown) return ''
 
-  return markdown
-    .trim()
-    // 移除 Frontmatter
-    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
-    // 移除代码块
-    .replace(/```[\s\S]*?```/g, '')
-    // 移除行内代码
-    .replace(/`([^`]+)`/g, '$1')
-    // 移除图片
-    .replace(/!\[.*?\]\(.*?\)/g, '')
-    // 移除链接保留文字
-    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
-    // 移除标题标记
-    .replace(/#{1,6}\s+/g, '')
-    // 移除粗体和斜体
-    .replace(/(\*\*|__)(.*?)\1/g, '$2')
-    .replace(/(\*|_)(.*?)\1/g, '$2')
-    // 移除引用符号与无序列表
-    .replace(/^[>*-]\s+/gm, '')
-    // 压缩多余空白
-    .replace(/\s+/g, ' ')
-    .trim()
+  return (
+    markdown
+      .trim()
+      // 移除 Frontmatter
+      .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
+      // 移除代码块
+      .replace(/```[\s\S]*?```/g, '')
+      // 移除行内代码
+      .replace(/`([^`]+)`/g, '$1')
+      // 移除图片
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      // 移除链接保留文字
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+      // 移除标题标记
+      .replace(/#{1,6}\s+/g, '')
+      // 移除粗体和斜体
+      .replace(/(\*\*|__)(.*?)\1/g, '$2')
+      .replace(/(\*|_)(.*?)\1/g, '$2')
+      // 移除引用符号与无序列表
+      .replace(/^[>*-]\s+/gm, '')
+      // 压缩多余空白
+      .replace(/\s+/g, ' ')
+      .trim()
+  )
 }
 
 /**
@@ -148,10 +150,7 @@ export function generateSmartTitles(
 /**
  * 智能提炼文章摘要 (100 - 150 字)
  */
-export function generateSmartSummary(
-  content: string,
-  title?: string
-): string {
+export function generateSmartSummary(content: string, title?: string): string {
   const clean = cleanMarkdownText(content)
   if (!clean) {
     return title ? `本文主要围绕「${title}」展开深入探讨与实践分享。` : ''

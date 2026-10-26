@@ -75,7 +75,10 @@ export function parseYamlFrontmatter(yamlStr: string): Record<string, unknown> {
       if (rawVal.startsWith('[') && rawVal.endsWith(']')) {
         const inner = rawVal.slice(1, -1).trim()
         result[key] = inner
-          ? inner.split(',').map((s) => stripQuotes(s.trim())).filter(Boolean)
+          ? inner
+              .split(',')
+              .map((s) => stripQuotes(s.trim()))
+              .filter(Boolean)
           : []
         continue
       }
@@ -90,9 +93,12 @@ export function parseYamlFrontmatter(yamlStr: string): Record<string, unknown> {
 function mapCategory(raw: unknown): ArticleCategory {
   if (typeof raw !== 'string') return 'tech'
   const v = raw.toLowerCase().trim()
-  if (['tech', '技术', '技术干货', 'technology', 'dev'].includes(v)) return 'tech'
-  if (['tutorial', '教程', '实战', '实战教程', 'guide', 'howto'].includes(v)) return 'tutorial'
-  if (['essay', '随笔', '观点', '观点随笔', 'life', 'thought'].includes(v)) return 'essay'
+  if (['tech', '技术', '技术干货', 'technology', 'dev'].includes(v))
+    return 'tech'
+  if (['tutorial', '教程', '实战', '实战教程', 'guide', 'howto'].includes(v))
+    return 'tutorial'
+  if (['essay', '随笔', '观点', '观点随笔', 'life', 'thought'].includes(v))
+    return 'essay'
   if (['news', '资讯', '快讯', '行业快讯', 'trend'].includes(v)) return 'news'
   return 'tech'
 }
@@ -153,7 +159,8 @@ function mapPlatforms(raw: unknown): ArticlePlatform[] {
 
 function mapTags(raw: unknown): string[] {
   if (!raw) return []
-  if (Array.isArray(raw)) return raw.map((s) => String(s).trim()).filter(Boolean)
+  if (Array.isArray(raw))
+    return raw.map((s) => String(s).trim()).filter(Boolean)
   if (typeof raw === 'string') {
     return raw
       .split(/[,，、;\s]+/)
@@ -199,13 +206,14 @@ export function parseMarkdownFile(
 
   // 2. 摘要提取(Frontmatter > 正文第一个文本段落)
   let excerpt = ''
-  const rawExcerpt = frontmatter.excerpt || frontmatter.description || frontmatter.summary
+  const rawExcerpt =
+    frontmatter.excerpt || frontmatter.description || frontmatter.summary
   if (typeof rawExcerpt === 'string' && rawExcerpt.trim()) {
     excerpt = rawExcerpt.trim()
   } else {
     const paragraphs = bodyContent.split(/\r?\n\r?\n/)
     for (const p of paragraphs) {
-      const clean = p.replace(/^#+\s+.*$/mg, '').trim()
+      const clean = p.replace(/^#+\s+.*$/gm, '').trim()
       if (
         clean &&
         !clean.startsWith('-') &&
@@ -225,8 +233,12 @@ export function parseMarkdownFile(
   // 3. 分类、状态、标签、渠道映射
   const category = mapCategory(frontmatter.category || frontmatter.categories)
   const status = mapStatus(frontmatter.status)
-  const tags = mapTags(frontmatter.tags || frontmatter.tag || frontmatter.keywords)
-  const platforms = mapPlatforms(frontmatter.platforms || frontmatter.channels || frontmatter.platform)
+  const tags = mapTags(
+    frontmatter.tags || frontmatter.tag || frontmatter.keywords
+  )
+  const platforms = mapPlatforms(
+    frontmatter.platforms || frontmatter.channels || frontmatter.platform
+  )
 
   // 4. 日期处理
   let scheduledAt: Date | undefined

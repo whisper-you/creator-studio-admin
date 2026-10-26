@@ -81,7 +81,7 @@ export function SignUpForm({
             throw new Error(message, { cause: err })
           }
           // 后端未启动:离线演示模式只提示,不创建本地账号
-          throw new Error('后端未启动,无法注册;请先运行 pnpm server', {
+          throw new Error('后端未启动,无法注册;请先运行 pnpm run server', {
             cause: err,
           })
         }

@@ -1,5 +1,11 @@
 import { useMemo } from 'react'
-import { CalendarClock, Eye, FileText, ThumbsUp, TrendingUp } from 'lucide-react'
+import {
+  CalendarClock,
+  Eye,
+  FileText,
+  ThumbsUp,
+  TrendingUp,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useArticlesStore } from '@/features/articles/store'
@@ -12,7 +18,8 @@ export function StatCards() {
     const totalViews = articles.reduce((s, a) => s + a.views, 0)
     const totalLikes = articles.reduce((s, a) => s + a.likes, 0)
     const scheduled = articles.filter((a) => a.status === 'scheduled').length
-    const interactionRate = totalViews > 0 ? ((totalLikes / totalViews) * 100).toFixed(1) : '0.0'
+    const interactionRate =
+      totalViews > 0 ? ((totalLikes / totalViews) * 100).toFixed(1) : '0.0'
 
     return [
       {

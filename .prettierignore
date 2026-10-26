@@ -1,0 +1,15 @@
+# 依赖与构建产物
+node_modules
+dist
+coverage
+.tanstack
+
+# 锁文件与自动生成文件
+pnpm-lock.yaml
+src/routeTree.gen.ts
+
+# 运行时数据与测试产物
+server/data
+uploads
+.vitest-attachments
+**/__screenshots__/

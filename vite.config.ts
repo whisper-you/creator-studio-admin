@@ -23,7 +23,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // 开发环境把 /api 代理到本地 Express 后端(pnpm server)
+      // 开发环境把 /api 代理到本地 Express 后端(pnpm run server)
       '/api': 'http://localhost:5180',
     },
   },
