@@ -9,9 +9,14 @@ import {
   clearRefreshCookie,
   consumeRefreshToken,
   createRefreshToken,
+  findSessionIdByToken,
+  listUserSessions,
   readRefreshCookie,
   revokeAllRefreshTokens,
+  revokeOtherSessions,
   revokeRefreshToken,
+  revokeUserSession,
+  sessionMeta,
   setRefreshCookie,
   signAccessToken,
 } from '../services/session.js'
@@ -33,8 +38,8 @@ function isRoleSwitchAllowed() {
 }
 
 /** 签发短时 access token,并把 refresh token 写入 HttpOnly Cookie */
-function issueSession(res, user) {
-  const refresh = createRefreshToken(user.id)
+function issueSession(req, res, user) {
+  const refresh = createRefreshToken(user.id, sessionMeta(req))
   setRefreshCookie(res, refresh.token, refresh.expiresAt)
   return { accessToken: signAccessToken(user), user: userToJson(user) }
 }
@@ -122,7 +127,7 @@ authRouter.post('/register', (req, res) => {
   const user = db
     .prepare('SELECT * FROM users WHERE id = ?')
     .get(result.lastInsertRowid)
-  res.status(201).json(issueSession(res, user))
+  res.status(201).json(issueSession(req, res, user))
 })
 
 authRouter.post('/login', (req, res) => {
@@ -136,7 +141,7 @@ authRouter.post('/login', (req, res) => {
   if (!user || !compareSync(parsed.data.password, user.password_hash)) {
     return res.status(401).json({ message: '邮箱或密码错误' })
   }
-  res.json(issueSession(res, user))
+  res.json(issueSession(req, res, user))
 })
 
 /**
@@ -149,7 +154,7 @@ authRouter.post('/refresh', (req, res) => {
     return res.status(401).json({ message: '登录已过期,请重新登录' })
   }
 
-  const result = consumeRefreshToken(raw)
+  const result = consumeRefreshToken(raw, sessionMeta(req))
   if (result.status === 'reused') {
     recordAudit(
       { user: { id: result.userId } },
@@ -183,6 +188,71 @@ authRouter.post('/logout', (req, res) => {
   if (raw) revokeRefreshToken(raw)
   clearRefreshCookie(res)
   res.status(204).end()
+})
+
+/** 当前账号的登录设备列表(仅返回未撤销且未过期的会话) */
+authRouter.get('/sessions', requireAuth, (req, res) => {
+  const currentId = findSessionIdByToken(
+    req.userId,
+    readRefreshCookie(req)
+  )
+  const rows = listUserSessions(req.userId)
+  res.json({
+    data: rows.map((row) => ({
+      id: row.id,
+      userAgent: row.user_agent ?? null,
+      ip: row.ip ?? null,
+      createdAt: row.created_at,
+      lastUsedAt: row.last_used_at ?? null,
+      expiresAt: row.expires_at,
+      current: row.id === currentId,
+    })),
+    total: rows.length,
+  })
+})
+
+/** 撤销自己的某个非当前会话 */
+authRouter.delete('/sessions/:id', requireAuth, (req, res) => {
+  const sessionId = Number(req.params.id)
+  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+    return res.status(404).json({ message: '会话不存在或已失效' })
+  }
+  const currentId = findSessionIdByToken(
+    req.userId,
+    readRefreshCookie(req)
+  )
+  if (sessionId === currentId) {
+    return res.status(400).json({ message: '请使用退出登录来结束当前设备的会话' })
+  }
+
+  const revoked = revokeUserSession(req.userId, sessionId)
+  if (revoked === 0) {
+    return res.status(404).json({ message: '会话不存在或已失效' })
+  }
+  recordAudit(req, {
+    action: 'auth.session_revoke',
+    entityType: 'user',
+    entityId: req.userId,
+    detail: { sessionId },
+  })
+  res.status(204).end()
+})
+
+/** 退出其他所有设备,保留当前会话 */
+authRouter.delete('/sessions', requireAuth, (req, res) => {
+  const revokedSessions = revokeOtherSessions(
+    req.userId,
+    readRefreshCookie(req)
+  )
+  if (revokedSessions > 0) {
+    recordAudit(req, {
+      action: 'auth.session_revoke_others',
+      entityType: 'user',
+      entityId: req.userId,
+      detail: { revokedSessions },
+    })
+  }
+  res.json({ ok: true, revokedSessions })
 })
 
 authRouter.get('/me', requireAuth, (req, res) => {
@@ -277,5 +347,5 @@ authRouter.post('/change-password', requireAuth, (req, res) => {
   })
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId)
-  res.json(issueSession(res, user))
+  res.json(issueSession(req, res, user))
 })

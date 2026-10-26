@@ -36,7 +36,7 @@ creator-studio-admin/
 │   │   ├── article-status.js     # 文章状态机与流转规则（与前端 statusFlow 对齐）
 │   │   ├── audit.js              # 敏感操作审计日志写入与分页查询
 │   │   ├── jwt-secret.js         # JWT 密钥解析与生产环境启动校验
-│   │   ├── session.js            # 短时 access token + HttpOnly refresh token 轮换/吊销
+│   │   ├── session.js            # 短时 access token + HttpOnly refresh token 轮换/吊销/设备会话列表
 │   │   ├── observability.js      # X-Request-Id、结构化访问日志与就绪检查
 │   │   ├── seed-policy.js        # 演示数据开关与生产管理员引导策略
 │   │   ├── security.js           # Helmet 安全头、CORS 白名单与认证端点限流
@@ -78,7 +78,7 @@ creator-studio-admin/
 │   │   ├── comments/             # 读者留言审核模块
 │   │   ├── auth/                 # 认证与登录界面
 │   │   ├── errors/               # 403 / 404 / 500 错误兜底页
-│   │   └── settings/             # 个人配置与偏好设置
+│   │   └── settings/             # 个人配置、改密与登录设备管理
 │   ├── lib/                      # 全局底层基础设施
 │   │   ├── api.ts                # Axios 客户端封装（JWT 拦截、401 静默续期与错误映射）
 │   │   ├── utils.ts              # Tailwind 类名合并（cn）等底层通用工具

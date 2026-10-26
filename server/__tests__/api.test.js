@@ -1050,6 +1050,166 @@ describe('会话续期与登出', () => {
   })
 })
 
+describe('登录设备与会话管理', () => {
+  const email = 'device-user@test.dev'
+  const password = 'password123'
+
+  const openSession = async (userAgent) => {
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': userAgent,
+      },
+      body: JSON.stringify({ email, password }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    return { token: body.accessToken, cookie: refreshCookieOf(res) }
+  }
+
+  const listSessions = async (token, cookie) => {
+    const res = await fetch(`${baseUrl}/api/auth/sessions`, {
+      headers: { ...authed(token), Cookie: cookie },
+    })
+    expect(res.status).toBe(200)
+    return res.json()
+  }
+
+  const revokeSession = (token, cookie, id) =>
+    fetch(`${baseUrl}/api/auth/sessions/${id}`, {
+      method: 'DELETE',
+      headers: { ...authed(token), Cookie: cookie },
+    })
+
+  beforeAll(async () => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name: '设备测试' }),
+    })
+    expect(res.status).toBe(201)
+  })
+
+  it('列出账号会话,只标记当前设备并回传 UA/IP', async () => {
+    const a = await openSession(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 ListA'
+    )
+    const b = await openSession(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1 ListB'
+    )
+
+    const body = await listSessions(a.token, a.cookie)
+    expect(body.total).toBeGreaterThanOrEqual(2)
+    const current = body.data.filter((session) => session.current)
+    expect(current).toHaveLength(1)
+    expect(current[0].userAgent).toContain('ListA')
+    expect(current[0].ip).toBeTruthy()
+
+    const other = body.data.find(
+      (session) => !session.current && session.userAgent?.includes('ListB')
+    )
+    expect(other).toBeTruthy()
+    expect(other.expiresAt).toBeTruthy()
+    // 两个设备各自持有独立可用的 refresh token
+    expect((await refreshWith(b.cookie)).status).toBe(200)
+  })
+
+  it('撤销其他设备后该设备 refresh token 立即失效', async () => {
+    const a = await openSession(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 RevokeA'
+    )
+    const b = await openSession(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) Firefox/121.0 RevokeB'
+    )
+    const body = await listSessions(a.token, a.cookie)
+    const target = body.data.find(
+      (session) => !session.current && session.userAgent?.includes('RevokeB')
+    )
+    expect(target).toBeTruthy()
+
+    const res = await revokeSession(a.token, a.cookie, target.id)
+    expect(res.status).toBe(204)
+    expect((await refreshWith(b.cookie)).status).toBe(401)
+    // 当前设备会话不受影响
+    expect((await refreshWith(a.cookie)).status).toBe(200)
+
+    // 再次撤销同一会话返回 404
+    expect((await revokeSession(a.token, a.cookie, target.id)).status).toBe(404)
+  })
+
+  it('不能撤销当前设备,也不能撤销他人的会话', async () => {
+    const a = await openSession(
+      'Mozilla/5.0 (X11; Linux x86_64) Chrome/120 GuardA'
+    )
+    const body = await listSessions(a.token, a.cookie)
+    const current = body.data.find((session) => session.current)
+    expect(current).toBeTruthy()
+
+    const res = await revokeSession(a.token, a.cookie, current.id)
+    expect(res.status).toBe(400)
+
+    // 管理员自己的会话 id 对当前用户不可见,按他人会话处理返回 404
+    const adminSession = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'creator@studio.dev',
+        password: 'creator123',
+      }),
+    })
+    const adminToken = (await adminSession.json()).accessToken
+    const adminCookie = refreshCookieOf(adminSession)
+    const adminList = await listSessions(adminToken, adminCookie)
+    const adminId = adminList.data.find((session) => session.current)?.id
+    expect(adminId).toBeTruthy()
+
+    const foreign = await revokeSession(a.token, a.cookie, adminId)
+    expect(foreign.status).toBe(404)
+    // 他人会话仍然可用
+    expect((await refreshWith(adminCookie)).status).toBe(200)
+  })
+
+  it('退出其他设备保留当前会话,并写入审计', async () => {
+    const a = await openSession(
+      'Mozilla/5.0 (X11; Linux x86_64) Chrome/120 OthersA'
+    )
+    const b = await openSession(
+      'Mozilla/5.0 (Linux; Android 14) Chrome/120 OthersB'
+    )
+
+    const res = await fetch(`${baseUrl}/api/auth/sessions`, {
+      method: 'DELETE',
+      headers: { ...authed(a.token), Cookie: a.cookie },
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.revokedSessions).toBeGreaterThanOrEqual(1)
+
+    expect((await refreshWith(b.cookie)).status).toBe(401)
+    expect((await refreshWith(a.cookie)).status).toBe(200)
+
+    const remaining = await listSessions(a.token, a.cookie)
+    expect(
+      remaining.data.some((session) => session.userAgent?.includes('OthersB'))
+    ).toBe(false)
+
+    const admin = (await (await login()).json()).accessToken
+    for (const action of [
+      'auth.session_revoke',
+      'auth.session_revoke_others',
+    ]) {
+      const logs = await fetch(`${baseUrl}/api/audit-logs?action=${action}`, {
+        headers: authed(admin),
+      })
+      const logBody = await logs.json()
+      expect(logBody.data.length).toBeGreaterThan(0)
+      expect(logBody.data[0].entityType).toBe('user')
+    }
+  })
+})
+
 describe('评论接口', () => {
   let token
 

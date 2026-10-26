@@ -9,7 +9,7 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express)
 ![SQLite](https://img.shields.io/badge/SQLite-node:sqlite-003B57?style=flat-square&logo=sqlite)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
-![Tests](https://img.shields.io/badge/Tests-132%20Passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-136%20Passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 <p align="center">
@@ -112,6 +112,7 @@
 - **自助改密与令牌吊销**：登录后可在「设置 → 个人资料」修改密码；服务端校验当前密码并递增 `token_version`，该账号所有旧 JWT 立即失效，当前会话自动换发新 token，其他设备需重新登录。
 - **短时令牌与静默续期**：access token 默认 15 分钟，refresh token 存于 HttpOnly + SameSite Cookie（默认 30 天）。前端在 401 时自动单飞刷新并重放请求；每次刷新轮换 refresh token，旧 token 被重放会吊销该用户全部会话。退出登录会同时吊销服务端会话。
 - **用户与会话管理**：管理员可在「用户管理」中搜索账号、查看活跃会话数，并调整角色、重置密码或强制下线。角色变更立即生效（鉴权每次从数据库读取角色），无需对方重新登录；重置密码会设置新密码并递增 `token_version`、吊销该用户全部 refresh token；强制下线只吊销会话不改密码。所有操作均写入审计日志，且禁止对自己执行（改自己密码请走个人设置，退出自己请走登出）。
+- **登录设备管理**：登录会话会记录 User-Agent 与 IP，「设置 → 个人资料」可查看全部有效设备（标记当前设备、最近活动时间），支持单独退出某一设备或一键退出其他所有设备；撤销立即生效并写入 `auth.session_revoke` / `auth.session_revoke_others` 审计。
 - **安全边界加固**：Helmet 安全响应头（含 CSP）、CORS 白名单（默认仅同源）、登录/注册/改密限流；图床上传仅允许 PNG/JPEG/WebP/GIF 且单图不超过 5 MB，并校验文件头，详见 [生产环境边界说明](./docs/PRODUCTION.md)。
 - **无缝身份切换器**：右上角个人头像下拉框提供一键切换 Admin / Editor / Author 角色，便于多角色流程验证。该功能默认仅在非生产环境开放；生产环境如需保留演示能力，可显式设置 `ALLOW_ROLE_SWITCH=true`。
 
@@ -371,7 +372,7 @@ server {
 项目实施严苛的代码质量与自动化测试工程规范：
 
 ```bash
-# 执行后端 API 集成测试 (81 个用例覆盖登录鉴权、会话续期与登出、改密吊销、管理员角色调整/重置密码/强制下线、文章 CRUD/乐观锁、图床上传安全、Webhook、RBAC、状态机、审计与自动分发)
+# 执行后端 API 集成测试 (85 个用例覆盖登录鉴权、会话续期与登出、登录设备管理、改密吊销、管理员角色调整/重置密码/强制下线、文章 CRUD/乐观锁、图床上传安全、Webhook、RBAC、状态机、审计与自动分发)
 pnpm test:server
 
 # 执行全量代码静态规范检查 (ESLint 9)
@@ -383,7 +384,7 @@ pnpm build
 
 当前测试运行结果：
 
-- `server/__tests__/api.test.js`：81 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、管理员角色调整/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
+- `server/__tests__/api.test.js`：85 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、登录设备列表与撤销、管理员角色调整/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
 - `server/__tests__/jwt-secret.test.js`：8 个 JWT 密钥解析与生产启动校验测试全部通过。
 - `server/__tests__/seed-policy.test.js`：12 个种子数据策略、管理员引导与生产初始化测试全部通过。
 - `server/__tests__/security.test.js`：10 个安全响应头、CORS 白名单与认证限流测试全部通过。
@@ -392,7 +393,7 @@ pnpm build
 - `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
 - `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
 - `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
-- **全套 132 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
+- **全套 136 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
 
 ---
 
@@ -446,6 +447,7 @@ pnpm build
   - [x] 文章乐观锁与 409 冲突自动刷新
   - [x] 敏感操作审计日志与管理员查询页
   - [x] 管理员用户管理：角色调整、重置密码、强制下线与活跃会话查看
+  - [x] 登录设备列表与自助撤销（单设备 / 其他全部设备）
   - [x] 就绪探针、X-Request-Id 结构化访问日志与优雅停机
   - [x] 图床上传格式白名单、5 MB 限制与文件头魔数校验
 - [ ] **未来探索**：

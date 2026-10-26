@@ -3,6 +3,7 @@ import { Separator } from '@/components/ui/separator'
 import { ContentSection } from '../components/content-section'
 import { PasswordForm } from './password-form'
 import { ProfileForm } from './profile-form'
+import { SessionList } from './session-list'
 
 export function SettingsProfile() {
   // key 绑定用户 id:刷新后 /me 异步恢复用户,恢复完成时表单以真实值重挂载
@@ -22,6 +23,7 @@ export function SettingsProfile() {
           <Separator className='my-4' />
           <PasswordForm />
         </div>
+        <SessionList />
       </div>
     </ContentSection>
   )

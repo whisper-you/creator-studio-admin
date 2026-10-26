@@ -29,6 +29,12 @@ export function hashRefreshToken(token) {
   return createHash('sha256').update(token).digest('hex')
 }
 
+/** 记录会话来源,供「登录设备」展示与区分 */
+export function sessionMeta(req) {
+  const userAgent = String(req.headers['user-agent'] ?? '').slice(0, 255)
+  return { userAgent: userAgent || null, ip: req.ip ?? null }
+}
+
 /** 清理过期记录;已撤销但未过期的保留一段时间,用于识别重放 */
 export function cleanupExpiredRefreshTokens() {
   db.prepare('DELETE FROM refresh_tokens WHERE expires_at < ?').run(
@@ -36,17 +42,27 @@ export function cleanupExpiredRefreshTokens() {
   )
 }
 
-export function createRefreshToken(userId) {
+export function createRefreshToken(userId, meta = {}) {
   cleanupExpiredRefreshTokens()
   const token = randomBytes(32).toString('base64url')
   const now = new Date()
+  const nowIso = now.toISOString()
   const expiresAt = new Date(
     now.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000
   ).toISOString()
   db.prepare(
-    `INSERT INTO refresh_tokens (user_id, token_hash, expires_at, created_at)
-     VALUES (?, ?, ?, ?)`
-  ).run(userId, hashRefreshToken(token), expiresAt, now.toISOString())
+    `INSERT INTO refresh_tokens
+       (user_id, token_hash, expires_at, created_at, user_agent, ip, last_used_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    userId,
+    hashRefreshToken(token),
+    expiresAt,
+    nowIso,
+    meta.userAgent ?? null,
+    meta.ip ?? null,
+    nowIso
+  )
   return { token, expiresAt }
 }
 
@@ -54,7 +70,7 @@ export function createRefreshToken(userId) {
  * 校验并轮换 refresh token。
  * 已撤销的 token 被再次使用视为泄露重放,直接吊销该用户全部会话。
  */
-export function consumeRefreshToken(rawToken) {
+export function consumeRefreshToken(rawToken, meta = {}) {
   const hash = hashRefreshToken(rawToken)
   const row = db
     .prepare('SELECT * FROM refresh_tokens WHERE token_hash = ?')
@@ -86,7 +102,7 @@ export function consumeRefreshToken(rawToken) {
     return { status: 'reused', userId: row.user_id }
   }
 
-  const issued = createRefreshToken(row.user_id)
+  const issued = createRefreshToken(row.user_id, meta)
   return { status: 'ok', user, ...issued, userId: row.user_id }
 }
 
@@ -104,6 +120,56 @@ export function revokeAllRefreshTokens(userId, reason = 'password_change') {
        WHERE user_id = ? AND revoked_at IS NULL`
     )
     .run(new Date().toISOString(), reason, userId).changes
+}
+
+/** 当前用户全部有效会话,按创建时间倒序 */
+export function listUserSessions(userId) {
+  return db
+    .prepare(
+      `SELECT id, user_agent, ip, created_at, last_used_at, expires_at
+       FROM refresh_tokens
+       WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+       ORDER BY created_at DESC, id DESC`
+    )
+    .all(userId, new Date().toISOString())
+}
+
+/** 用 refresh cookie 反查当前会话 id,用于在设备列表里标记「当前设备」 */
+export function findSessionIdByToken(userId, rawToken) {
+  if (!rawToken) return null
+  const row = db
+    .prepare(
+      `SELECT id FROM refresh_tokens
+       WHERE user_id = ? AND token_hash = ? AND revoked_at IS NULL`
+    )
+    .get(userId, hashRefreshToken(rawToken))
+  return row?.id ?? null
+}
+
+/** 撤销指定会话;只允许操作属于该用户的记录 */
+export function revokeUserSession(userId, sessionId) {
+  return db
+    .prepare(
+      `UPDATE refresh_tokens SET revoked_at = ?, revoked_reason = 'session_revoke'
+       WHERE id = ? AND user_id = ? AND revoked_at IS NULL`
+    )
+    .run(new Date().toISOString(), sessionId, userId).changes
+}
+
+/** 撤销除当前会话外的全部会话 */
+export function revokeOtherSessions(userId, currentToken) {
+  const now = new Date().toISOString()
+  return db
+    .prepare(
+      `UPDATE refresh_tokens SET revoked_at = ?, revoked_reason = 'session_revoke_others'
+       WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ? AND token_hash != ?`
+    )
+    .run(
+      now,
+      userId,
+      now,
+      currentToken ? hashRefreshToken(currentToken) : ''
+    ).changes
 }
 
 export function readRefreshCookie(req) {

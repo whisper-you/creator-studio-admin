@@ -108,7 +108,10 @@ db.exec(`
     expires_at TEXT NOT NULL,
     created_at TEXT NOT NULL,
     revoked_at TEXT,
-    revoked_reason TEXT
+    revoked_reason TEXT,
+    user_agent TEXT,
+    ip         TEXT,
+    last_used_at TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
     ON refresh_tokens (user_id);
@@ -149,6 +152,18 @@ try {
 
 try {
   db.exec('ALTER TABLE refresh_tokens ADD COLUMN revoked_reason TEXT')
+} catch (_) {}
+
+try {
+  db.exec('ALTER TABLE refresh_tokens ADD COLUMN user_agent TEXT')
+} catch (_) {}
+
+try {
+  db.exec('ALTER TABLE refresh_tokens ADD COLUMN ip TEXT')
+} catch (_) {}
+
+try {
+  db.exec('ALTER TABLE refresh_tokens ADD COLUMN last_used_at TEXT')
 } catch (_) {}
 
 export function articleRowToJson(row) {

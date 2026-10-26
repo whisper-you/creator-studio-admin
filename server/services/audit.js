@@ -3,6 +3,8 @@ import { db } from '../db/index.js'
 const ACTIONS = [
   'auth.change_password',
   'auth.refresh_reuse',
+  'auth.session_revoke',
+  'auth.session_revoke_others',
   'user.role_change',
   'user.reset_password',
   'user.force_logout',

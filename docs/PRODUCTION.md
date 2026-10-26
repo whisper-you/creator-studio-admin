@@ -134,7 +134,8 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - `POST /api/auth/logout` 吊销当前 refresh token 并清除 Cookie；改密会吊销该用户全部 refresh token（同时递增 `token_version` 让存量 access token 失效），并为当前会话补发新 token。
 - 前端在请求返回 401 时自动单飞刷新并重放原请求；刷新失败才清理登录态并跳转登录页。页面刷新后若 access token 已过期，也会静默续期，无需用户重新登录。
 - 管理员用户管理：`GET /api/users` 分页/搜索账号并返回活跃会话数；`PATCH /api/users/:id/role` 调整角色；`POST /api/users/:id/reset-password` 设置新密码；`POST /api/users/:id/force-logout` 强制下线。角色调整立即生效并写入 `user.role_change` 审计；重置密码与强制下线都会递增 `token_version`、吊销目标用户全部 refresh token，并分别写入 `user.reset_password` / `user.force_logout` 审计。为避免管理员误伤自己，这三个接口禁止对自己执行（改自己密码请走个人设置，结束自己的会话请走登出）。
-- 服务端尚未提供忘记密码邮件重置与登录设备列表；`/api/auth/me` 仅支持修改昵称与角色。
+- 登录设备列表：`GET /api/auth/sessions` 返回当前账号全部有效会话（User-Agent、IP、创建时间、最近活动时间，并标记 `current`）；`DELETE /api/auth/sessions/:id` 撤销指定非当前会话（撤销当前会话返回 400，请走登出）；`DELETE /api/auth/sessions` 撤销除当前设备外的全部会话并返回撤销数量。撤销立即失效并写入 `auth.session_revoke` / `auth.session_revoke_others` 审计。会话元数据在登录/注册/刷新续期时写入 `refresh_tokens` 的 `user_agent` / `ip` / `last_used_at` 列（ip 为 `req.ip`，反向代理场景依赖 `TRUST_PROXY` 配置）。
+- 服务端尚未提供忘记密码邮件重置；`/api/auth/me` 仅支持修改昵称与角色。
 - 公开注册固定创建 `author` 用户。
 - 认证端点已限流：登录 30 次/15 分钟、注册 5 次/小时、改密 10 次/15 分钟、刷新 120 次/15 分钟，按客户端 IP 计数；单进程内存实现，重启清零。阈值可通过 `AUTH_RATE_LIMIT_*` / `REGISTER_RATE_LIMIT_*` / `CHANGE_PASSWORD_RATE_LIMIT_MAX` / `REFRESH_RATE_LIMIT_MAX` 调整。
 - CORS 默认仅同源：开发/测试放行本地 Vite（`localhost:5173`），生产不启用跨域；前后端分域部署时通过 `CORS_ORIGINS`（逗号分隔）显式放行。
@@ -264,7 +265,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 1. **数据库**：SQLite → PostgreSQL，引入版本化迁移与连接池。
 2. **文件**：本地 `uploads/` → 对象存储 + CDN。
 3. **调度与分发**：进程内定时器 → 独立 Worker + 队列（BullMQ / Redis / 云队列），支持重试、幂等与死信。
-4. **认证**：补充忘记密码邮件重置与登录设备列表；多副本时将 refresh token 会话与限流计数迁移到共享存储（Redis/PostgreSQL）。
+4. **认证**：补充忘记密码邮件重置；多副本时将 refresh token 会话与限流计数迁移到共享存储（Redis/PostgreSQL）。
 5. **可观测性**：在现有请求日志基础上补充指标、错误追踪与告警，并将日志集中收集。
 6. **部署**：单容器 → 无状态多副本 + 托管数据库 + 对象存储，调度器单独部署。
 

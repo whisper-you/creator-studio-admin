@@ -114,6 +114,23 @@ const loginSchema = z.object({
 
 type LoginResult = z.infer<typeof loginSchema>
 
+const sessionSchema = z.object({
+  id: z.number(),
+  userAgent: z.string().nullable().optional(),
+  ip: z.string().nullable().optional(),
+  createdAt: z.string(),
+  lastUsedAt: z.string().nullable().optional(),
+  expiresAt: z.string(),
+  current: z.boolean(),
+})
+
+const sessionListSchema = z.object({
+  data: z.array(sessionSchema),
+  total: z.number(),
+})
+
+export type SessionItem = z.infer<typeof sessionSchema>
+
 export const authApi = {
   async login(email: string, password: string): Promise<LoginResult> {
     return loginSchema.parse(
@@ -149,6 +166,20 @@ export const authApi = {
   /** 吊销服务端 refresh token 并清除 Cookie */
   async logout() {
     await api.post('/auth/logout')
+  },
+  /** 当前账号的登录设备列表 */
+  async listSessions() {
+    return sessionListSchema.parse((await api.get('/auth/sessions')).data)
+  },
+  async revokeSession(id: number) {
+    await api.delete(`/auth/sessions/${id}`)
+  },
+  async revokeOtherSessions() {
+    return (
+      await api.delete<{ ok: boolean; revokedSessions: number }>(
+        '/auth/sessions'
+      )
+    ).data
   },
 }
 
