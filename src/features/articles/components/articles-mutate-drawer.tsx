@@ -1,13 +1,20 @@
 import { useState } from 'react'
 import { z } from 'zod'
 import { format } from 'date-fns'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { zhCN } from 'date-fns/locale'
-import { Calendar as CalendarIcon } from 'lucide-react'
+import { Calendar as CalendarIcon, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  generateSmartTitles,
+  generateSmartSummary,
+  generateSmartTags,
+  type TitleCandidate,
+} from '@/lib/ai-assistant'
 import { bestPublishHour } from '@/lib/best-publish-time'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -100,12 +107,21 @@ export function ArticlesMutateDrawer({
   const addArticle = useArticlesStore((s) => s.addArticle)
   const updateArticles = useArticlesStore((s) => s.updateArticles)
 
-  // 编辑时只能停留在当前状态或按状态机流转;新建可选任意初始状态
-  const statusOptions = (
-    isUpdate
-      ? [currentRow.status, ...statusFlow[currentRow.status]]
-      : [...ARTICLE_STATUSES]
-  ).map((s) => {
+  const user = useAuthStore((s) => s.auth.user)
+  const isAuthor = user?.role === 'author'
+
+  let allowedStatuses = isUpdate
+    ? [currentRow.status, ...statusFlow[currentRow.status]]
+    : [...ARTICLE_STATUSES]
+
+  if (isAuthor) {
+    allowedStatuses = allowedStatuses.filter(
+      (s) => s === 'draft' || s === 'in_review'
+    )
+    if (allowedStatuses.length === 0) allowedStatuses = ['draft']
+  }
+
+  const statusOptions = allowedStatuses.map((s) => {
     const meta = statuses.find((x) => x.value === s)!
     return { label: meta.label, value: meta.value }
   })
@@ -141,8 +157,55 @@ export function ArticlesMutateDrawer({
         },
   })
 
-  const watchStatus = form.watch('status')
-  const watchDate = form.watch('scheduledAt')
+  const watchStatus = useWatch({ control: form.control, name: 'status' })
+  const watchDate = useWatch({ control: form.control, name: 'scheduledAt' })
+  const watchTitle = useWatch({ control: form.control, name: 'title' })
+  const watchContent = useWatch({ control: form.control, name: 'content' })
+  const watchCategory = useWatch({ control: form.control, name: 'category' })
+
+  const [aiTitleOpen, setAiTitleOpen] = useState(false)
+  const [titleCandidates, setTitleCandidates] = useState<TitleCandidate[]>([])
+
+  const handleGenerateAiTitles = () => {
+    const candidates = generateSmartTitles(watchContent || '', watchTitle || '')
+    setTitleCandidates(candidates)
+  }
+
+  const handleSelectTitle = (title: string) => {
+    form.setValue('title', title, { shouldValidate: true, shouldDirty: true })
+    setAiTitleOpen(false)
+    toast.success('已采用 AI 爆款标题')
+  }
+
+  const handleAiSummary = () => {
+    if (!watchContent?.trim() && !watchTitle?.trim()) {
+      toast.warning('请先填写标题或正文内容')
+      return
+    }
+    const summary = generateSmartSummary(watchContent || '', watchTitle || '')
+    form.setValue('excerpt', summary, {
+      shouldValidate: true,
+      shouldDirty: true,
+    })
+    toast.success('已自动提炼文章摘要')
+  }
+
+  const handleAiTags = () => {
+    if (!watchContent?.trim() && !watchTitle?.trim()) {
+      toast.warning('请先填写标题或正文内容')
+      return
+    }
+    const tags = generateSmartTags(
+      watchContent || '',
+      watchTitle || '',
+      watchCategory
+    )
+    form.setValue('tags', tags.join('、'), {
+      shouldValidate: true,
+      shouldDirty: true,
+    })
+    toast.success(`已推荐并填入 ${tags.length} 个标签`)
+  }
 
   const onSubmit = (values: ArticleForm) => {
     if (values.status === 'scheduled' && !values.scheduledAt) {
@@ -214,6 +277,7 @@ export function ArticlesMutateDrawer({
             {isUpdate
               ? '修改文章信息;状态只能停留在当前状态或按状态机流转。'
               : '填写选题信息,创建后将进入内容流水线。'}
+            {isAuthor && '（作者权限：仅可保存草稿或提交主编审核）'}
             完成后点击保存。
           </SheetDescription>
         </SheetHeader>
@@ -228,7 +292,49 @@ export function ArticlesMutateDrawer({
               name='title'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>标题</FormLabel>
+                  <div className='flex items-center justify-between'>
+                    <FormLabel>标题</FormLabel>
+                    <Popover open={aiTitleOpen} onOpenChange={setAiTitleOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='sm'
+                          className='h-6 text-xs text-emerald-600 dark:text-emerald-400 gap-1 px-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+                          onClick={handleGenerateAiTitles}
+                        >
+                          <Sparkles className='size-3' />
+                          <span>AI 爆款标题</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align='end' className='w-80 p-3 space-y-2 text-xs'>
+                        <div className='flex items-center justify-between font-medium border-b pb-1.5'>
+                          <span className='flex items-center gap-1.5 text-foreground'>
+                            <Sparkles className='size-3.5 text-emerald-600' />
+                            AI 爆款标题建议
+                          </span>
+                          <span className='text-[10px] text-muted-foreground'>点击一键采用</span>
+                        </div>
+                        <div className='space-y-1.5 max-h-60 overflow-y-auto'>
+                          {titleCandidates.map((item, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => handleSelectTitle(item.title)}
+                              className='p-2 rounded-md border hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 cursor-pointer transition-colors space-y-1'
+                            >
+                              <div className='flex items-center justify-between'>
+                                <span className='text-[10px] px-1.5 py-0.5 rounded bg-muted font-medium text-muted-foreground'>
+                                  {item.styleLabel}
+                                </span>
+                              </div>
+                              <p className='text-xs font-medium text-foreground leading-snug'>{item.title}</p>
+                              <p className='text-[11px] text-muted-foreground'>{item.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                   <FormControl>
                     <Input {...field} placeholder='输入文章标题' />
                   </FormControl>
@@ -292,7 +398,19 @@ export function ArticlesMutateDrawer({
               name='tags'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>标签</FormLabel>
+                  <div className='flex items-center justify-between'>
+                    <FormLabel>标签</FormLabel>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-6 text-xs text-purple-600 dark:text-purple-400 gap-1 px-1.5 hover:bg-purple-50 dark:hover:bg-purple-950/30'
+                      onClick={handleAiTags}
+                    >
+                      <Sparkles className='size-3' />
+                      <span>AI 推荐标签</span>
+                    </Button>
+                  </div>
                   <FormControl>
                     <Input
                       {...field}
@@ -310,7 +428,19 @@ export function ArticlesMutateDrawer({
               name='excerpt'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>摘要</FormLabel>
+                  <div className='flex items-center justify-between'>
+                    <FormLabel>摘要</FormLabel>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='sm'
+                      className='h-6 text-xs text-blue-600 dark:text-blue-400 gap-1 px-1.5 hover:bg-blue-50 dark:hover:bg-blue-950/30'
+                      onClick={handleAiSummary}
+                    >
+                      <Sparkles className='size-3' />
+                      <span>AI 提炼摘要</span>
+                    </Button>
+                  </div>
                   <FormControl>
                     <Textarea
                       {...field}
@@ -334,6 +464,7 @@ export function ArticlesMutateDrawer({
                       value={field.value ?? ''}
                       onChange={field.onChange}
                       rows={8}
+                      articleTitle={watchTitle}
                     />
                   </FormControl>
                   <FormMessage />

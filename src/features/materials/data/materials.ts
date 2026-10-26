@@ -1,9 +1,11 @@
-type Material = {
+export type Material = {
+  id?: number
   name: string
-  type: '标题公式' | '封面模板' | '话题灵感' | '数据报告'
+  type: string
   scene: string
   usage: number
   status: 'active' | 'updating' | 'deprecated'
+  url?: string | null
 }
 
 export const materials: Material[] = [

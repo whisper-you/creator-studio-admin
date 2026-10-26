@@ -72,3 +72,17 @@ export function nextArticleId(articles: { id: string }[]): string {
   }, 0)
   return `ART-${String(max + 1).padStart(3, '0')}`
 }
+
+export function generateArticleIds(
+  articles: { id: string }[],
+  count: number
+): string[] {
+  const max = articles.reduce((acc, a) => {
+    const n = Number.parseInt(a.id.replace('ART-', ''), 10)
+    return Number.isNaN(n) ? acc : Math.max(acc, n)
+  }, 0)
+  return Array.from(
+    { length: count },
+    (_, i) => `ART-${String(max + 1 + i).padStart(3, '0')}`
+  )
+}

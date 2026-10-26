@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import useDialogState from '@/hooks/use-dialog-state'
+import { type ParsedMarkdownFile } from '@/lib/parse-markdown'
 import { type Article } from '../data/schema'
 import { useArticlesStore } from '../store'
 
@@ -9,12 +10,15 @@ type ArticlesDialogType =
   | 'delete'
   | 'delete-multi'
   | 'schedule'
+  | 'import'
 
 type ArticlesContextType = {
   open: ArticlesDialogType | null
   setOpen: (str: ArticlesDialogType | null) => void
   currentRow: Article | null
   setCurrentRow: React.Dispatch<React.SetStateAction<Article | null>>
+  initialImport: ParsedMarkdownFile[]
+  setInitialImport: React.Dispatch<React.SetStateAction<ParsedMarkdownFile[]>>
 }
 
 const ArticlesContext = React.createContext<ArticlesContextType | null>(null)
@@ -26,6 +30,7 @@ const ArticlesContext = React.createContext<ArticlesContextType | null>(null)
 export function ArticlesProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useDialogState<ArticlesDialogType>(null)
   const [currentRow, setCurrentRow] = useState<Article | null>(null)
+  const [initialImport, setInitialImport] = useState<ParsedMarkdownFile[]>([])
 
   // 进入应用时尝试从后端拉取文章;后端未启动则自动保持离线演示模式
   useEffect(() => {
@@ -33,7 +38,16 @@ export function ArticlesProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <ArticlesContext value={{ open, setOpen, currentRow, setCurrentRow }}>
+    <ArticlesContext
+      value={{
+        open,
+        setOpen,
+        currentRow,
+        setCurrentRow,
+        initialImport,
+        setInitialImport,
+      }}
+    >
       {children}
     </ArticlesContext>
   )

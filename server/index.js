@@ -1,5 +1,5 @@
 import express from 'express'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import cors from 'cors'
@@ -9,13 +9,26 @@ import { channelsRouter } from './routes/channels.js'
 import { materialsRouter } from './routes/materials.js'
 import { statsRouter } from './routes/stats.js'
 import { commentsRouter } from './routes/comments.js'
+import { distributionRouter } from './routes/distribution.js'
+import {
+  startScheduler,
+  stopScheduler,
+  checkAndPublishScheduledArticles,
+} from './scheduler.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PORT = Number(process.env.API_PORT) || 5180
 
+// 本地自托管图床静态存储目录
+const uploadsDir = join(__dirname, '../uploads')
+if (!existsSync(uploadsDir)) {
+  mkdirSync(uploadsDir, { recursive: true })
+}
+
 const app = express()
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '25mb' }))
+app.use('/uploads', express.static(uploadsDir))
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 app.use('/api/auth', authRouter)
@@ -24,6 +37,7 @@ app.use('/api/channels', channelsRouter)
 app.use('/api/materials', materialsRouter)
 app.use('/api/stats', statsRouter)
 app.use('/api/comments', commentsRouter)
+app.use('/api/distribution', distributionRouter)
 
 // 生产模式:同端口托管前端构建产物(单服务部署)
 const distDir = join(__dirname, '..', 'dist')
@@ -37,12 +51,13 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ message: '服务器内部错误' })
 })
 
-// 导出 app 供测试使用;直接运行时才监听端口
+// 导出 app 供测试使用;直接运行时才监听端口并启动后台调度器
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
 if (isMain) {
+  startScheduler()
   app.listen(PORT, () => {
     console.log(`[api] Creator Studio API 已启动:http://localhost:${PORT}`)
   })
 }
 
-export { app }
+export { app, startScheduler, stopScheduler, checkAndPublishScheduledArticles }

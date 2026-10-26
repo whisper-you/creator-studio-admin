@@ -5,7 +5,13 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['server/**/*.test.js'],
+    include: [
+      'server/**/*.test.js',
+      'src/lib/parse-markdown.test.ts',
+      'src/lib/wechat-formatter.test.ts',
+      'src/lib/export-article.test.ts',
+      'src/lib/ai-assistant.test.ts',
+    ],
     hookTimeout: 15000,
   },
 })

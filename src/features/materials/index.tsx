@@ -22,7 +22,7 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-import { materials as seedMaterials } from './data/materials'
+import { materials as seedMaterials, type Material } from './data/materials'
 
 const statusBadge = {
   active: { label: '可用', variant: 'default' },
@@ -32,7 +32,7 @@ const statusBadge = {
 
 export function Materials() {
   // 挂载时从后端拉取;后端不可用时降级为种子数据
-  const [rows, setRows] = useState(seedMaterials)
+  const [rows, setRows] = useState<Material[]>(seedMaterials)
 
   useEffect(() => {
     materialsApi

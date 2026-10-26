@@ -26,6 +26,7 @@ type ArticlesState = {
   mode: SyncMode
   hydrate: () => Promise<void>
   addArticle: (article: Article) => void
+  addArticles: (articles: Article[]) => void
   updateArticles: (
     ids: Article['id'][],
     patch: Partial<Omit<Article, 'id'>>
@@ -81,6 +82,12 @@ export const useArticlesStore = create<ArticlesState>()(
           optimistic(
             () => [article, ...get().articles],
             () => articlesApi.create(article)
+          ),
+
+        addArticles: (newArticles) =>
+          optimistic(
+            () => [...newArticles, ...get().articles],
+            () => articlesApi.createBulk(newArticles)
           ),
 
         updateArticles: (ids, patch) =>

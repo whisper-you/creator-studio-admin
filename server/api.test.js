@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'cs-api-test-'))
 process.env.JWT_SECRET = 'test-secret'
 
-const { app } = await import('./index.js')
+const { app, checkAndPublishScheduledArticles } = await import('./index.js')
 
 let baseUrl
 let server
@@ -88,6 +88,40 @@ describe('文章 CRUD 全流程', () => {
     expect(res.status).toBe(201)
     created.body = await res.json()
     expect(created.body.tags).toEqual(['测试'])
+  })
+
+  it('POST /bulk 批量创建文章', async () => {
+    const res = await fetch(`${baseUrl}/api/articles/bulk`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        articles: [
+          {
+            id: 'ART-BULK-1',
+            title: '批量文章1',
+            excerpt: '摘要1',
+            content: '正文1',
+            status: 'draft',
+            category: 'tech',
+            tags: ['导入'],
+            platforms: ['website'],
+          },
+          {
+            id: 'ART-BULK-2',
+            title: '批量文章2',
+            excerpt: '摘要2',
+            content: '正文2',
+            status: 'published',
+            category: 'tutorial',
+            tags: ['教程'],
+            platforms: ['wechat'],
+          },
+        ],
+      }),
+    })
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.created).toBe(2)
   })
 
   it('GET 分页 + 筛选 + 搜索', async () => {
@@ -204,6 +238,41 @@ describe('文章 CRUD 全流程', () => {
       body: JSON.stringify({ ids: ['ART-901'] }),
     })
   })
+
+  it('自动发布调度器: 到达排期时间的文章自动流转为 published', async () => {
+    const pastDate = new Date(Date.now() - 60000).toISOString()
+    await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        id: 'ART-SCHED-AUTO',
+        title: '定时发布测试',
+        excerpt: 'desc',
+        content: 'body',
+        status: 'scheduled',
+        category: 'tech',
+        scheduledAt: pastDate,
+      }),
+    })
+
+    const published = checkAndPublishScheduledArticles()
+    expect(published.some((a) => a.id === 'ART-SCHED-AUTO')).toBe(true)
+
+    const checkRes = await fetch(`${baseUrl}/api/articles?filter=ART-SCHED-AUTO`, {
+      headers: authed(token),
+    })
+    const checkData = await checkRes.json()
+    const autoArticle = checkData.data.find((a) => a.id === 'ART-SCHED-AUTO')
+    expect(autoArticle?.status).toBe('published')
+    expect(autoArticle?.publishedAt).toBeTruthy()
+    expect(autoArticle?.scheduledAt).toBeUndefined()
+
+    // 清理
+    await fetch(`${baseUrl}/api/articles/ART-SCHED-AUTO`, {
+      method: 'DELETE',
+      headers: authed(token),
+    })
+  })
 })
 
 describe('渠道接口', () => {
@@ -270,8 +339,48 @@ describe('素材与统计接口', () => {
       headers: authed(token),
     })
     const body = await res.json()
-    expect(body.data.length).toBe(12)
-    expect(body.data[0]).toMatchObject({ type: '标题公式', status: 'active' })
+    expect(body.data.length).toBeGreaterThanOrEqual(12)
+    expect(body.data.some((m) => m.type === '标题公式')).toBe(true)
+  })
+
+  it('POST /api/materials/upload 本地自托管图床上传与落库', async () => {
+    // 1x1 透明 PNG base64
+    const tinyPng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const res = await fetch(`${baseUrl}/api/materials/upload`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        dataUrl: tinyPng,
+        filename: 'test-diagram.png',
+        name: '架构示意图',
+        scene: '技术架构',
+      }),
+    })
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.url).toMatch(/^\/uploads\/test-diagram-/)
+    expect(body.filename).toMatch(/\.png$/)
+
+    // 验证在 GET /api/materials 中已被记录
+    const listRes = await fetch(`${baseUrl}/api/materials`, {
+      headers: authed(token),
+    })
+    const listBody = await listRes.json()
+    const found = listBody.data.find((m) => m.name === '架构示意图')
+    expect(found).toBeDefined()
+    expect(found.type).toBe('图片素材')
+    expect(found.url).toBe(body.url)
+  })
+
+  it('POST /api/materials/upload 缺少 dataUrl 返回 400', async () => {
+    const res = await fetch(`${baseUrl}/api/materials/upload`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({ filename: 'test.png' }),
+    })
+    expect(res.status).toBe(400)
   })
 
   it('GET /api/stats/trend 返回确定性时序', async () => {
@@ -379,3 +488,85 @@ describe('评论接口', () => {
     expect(again.status).toBe(404)
   })
 })
+
+describe('第三梯队: Webhook、多渠道分发与 RBAC', () => {
+  let token
+
+  beforeAll(async () => {
+    token = (await (await login()).json()).accessToken
+  })
+
+  it('PATCH /api/channels/:name 配置 Webhook 地址与自动推送开关', async () => {
+    const res = await fetch(`${baseUrl}/api/channels/${encodeURIComponent('个人网站')}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({
+        webhookUrl: 'https://example.com/api/webhook',
+        autoPush: true,
+      }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.webhookUrl).toBe('https://example.com/api/webhook')
+    expect(body.autoPush).toBe(true)
+  })
+
+  it('POST /api/channels/:name/test-webhook 连通性测试', async () => {
+    const res = await fetch(`${baseUrl}/api/channels/${encodeURIComponent('个人网站')}/test-webhook`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        webhookUrl: '', // 传空时触发模拟成功
+      }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.status).toBe('simulated')
+  })
+
+  it('POST /api/distribution/dispatch 手动分发文章并生成分发日志', async () => {
+    const res = await fetch(`${baseUrl}/api/distribution/dispatch`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        articleId: 'ART-001',
+      }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.results.length).toBeGreaterThan(0)
+
+    // 验证日志查询
+    const logRes = await fetch(`${baseUrl}/api/distribution/logs?articleId=ART-001`, {
+      headers: authed(token),
+    })
+    const logBody = await logRes.json()
+    expect(logBody.data.length).toBeGreaterThan(0)
+    expect(logBody.data[0].articleId).toBe('ART-001')
+  })
+
+  it('PATCH /api/auth/me 支持切换用户角色 (RBAC: editor / author / admin)', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/me`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({
+        role: 'editor',
+      }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.role).toBe('editor')
+
+    // 还原为 admin
+    await fetch(`${baseUrl}/api/auth/me`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({
+        role: 'admin',
+      }),
+    })
+  })
+})
+

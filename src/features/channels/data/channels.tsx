@@ -10,12 +10,14 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-type Channel = {
+export type Channel = {
   name: string
   icon: LucideIcon
   color: string
   connected: boolean
   account?: string
+  webhookUrl?: string
+  autoPush?: boolean
   desc: string
 }
 

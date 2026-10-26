@@ -18,6 +18,13 @@ function signToken(user) {
   })
 }
 
+const userToJson = (u) => ({
+  id: String(u.id),
+  email: u.email,
+  name: u.name,
+  role: u.role || 'admin',
+})
+
 /** 校验 Authorization: Bearer <jwt>,通过后把 userId 挂到 req 上 */
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization ?? ''
@@ -37,6 +44,7 @@ export const authRouter = Router()
 
 const registerSchema = loginSchema.extend({
   name: z.string().min(1).max(30).default('新创作者'),
+  role: z.enum(['admin', 'editor', 'author']).default('admin'),
 })
 
 authRouter.post('/register', (req, res) => {
@@ -44,22 +52,22 @@ authRouter.post('/register', (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ message: '请输入合法的邮箱与密码' })
   }
-  const { email, password, name } = parsed.data
+  const { email, password, name, role } = parsed.data
   const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
   if (exists) {
     return res.status(409).json({ message: '该邮箱已被注册' })
   }
   const result = db
     .prepare(
-      'INSERT INTO users (email, name, password_hash, created_at) VALUES (?, ?, ?, ?)'
+      'INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)'
     )
-    .run(email, name, hashSync(password, 10), new Date().toISOString())
+    .run(email, name, hashSync(password, 10), role, new Date().toISOString())
   const user = db
     .prepare('SELECT * FROM users WHERE id = ?')
     .get(result.lastInsertRowid)
   res.status(201).json({
     accessToken: signToken(user),
-    user: { id: String(user.id), email: user.email, name: user.name },
+    user: userToJson(user),
   })
 })
 
@@ -76,26 +84,37 @@ authRouter.post('/login', (req, res) => {
   }
   res.json({
     accessToken: signToken(user),
-    user: { id: String(user.id), email: user.email, name: user.name },
+    user: userToJson(user),
   })
 })
 
 authRouter.get('/me', requireAuth, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId)
   if (!user) return res.status(401).json({ message: '用户不存在' })
-  res.json({ id: String(user.id), email: user.email, name: user.name })
+  res.json(userToJson(user))
 })
 
-// 更新个人资料(昵称)
+// 更新个人资料(昵称与角色切换)
 authRouter.patch('/me', requireAuth, (req, res) => {
   const parsed = z
-    .object({ name: z.string().min(1).max(30) })
+    .object({
+      name: z.string().min(1).max(30).optional(),
+      role: z.enum(['admin', 'editor', 'author']).optional(),
+    })
     .safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ message: '昵称不能为空' })
-  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(
-    parsed.data.name,
+  if (!parsed.success) return res.status(400).json({ message: '参数格式不正确' })
+
+  const current = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId)
+  if (!current) return res.status(404).json({ message: '用户不存在' })
+
+  const nextName = parsed.data.name !== undefined ? parsed.data.name : current.name
+  const nextRole = parsed.data.role !== undefined ? parsed.data.role : (current.role || 'admin')
+
+  db.prepare('UPDATE users SET name = ?, role = ? WHERE id = ?').run(
+    nextName,
+    nextRole,
     req.userId
   )
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId)
-  res.json({ id: String(user.id), email: user.email, name: user.name })
+  res.json(userToJson(user))
 })

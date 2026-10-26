@@ -5,6 +5,7 @@ import { useArticlesStore } from '../store'
 import { ArticlesMutateDrawer } from './articles-mutate-drawer'
 import { useArticles } from './articles-provider'
 import { ArticlesScheduleDialog } from './articles-schedule-dialog'
+import { ArticlesImportDialog } from './articles-import-dialog'
 
 export function ArticlesDialogs() {
   const { open, setOpen, currentRow, setCurrentRow } = useArticles()
@@ -14,6 +15,12 @@ export function ArticlesDialogs() {
 
   return (
     <>
+      <ArticlesImportDialog
+        key='article-import'
+        open={open === 'import'}
+        onOpenChange={(isOpen) => setOpen(isOpen ? 'import' : null)}
+      />
+
       <ArticlesMutateDrawer
         key='article-create'
         open={open === 'create'}

@@ -63,7 +63,8 @@ db.exec(`
     type   TEXT NOT NULL,
     scene  TEXT NOT NULL,
     usage_count INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'active'
+    status TEXT NOT NULL DEFAULT 'active',
+    url    TEXT
   );
   CREATE TABLE IF NOT EXISTS comments (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +74,35 @@ db.exec(`
     status     TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS distribution_logs (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id    TEXT NOT NULL,
+    article_title TEXT NOT NULL,
+    channel_name  TEXT NOT NULL,
+    target_url    TEXT,
+    status        TEXT NOT NULL,
+    response_code INTEGER DEFAULT 200,
+    message       TEXT,
+    created_at    TEXT NOT NULL
+  );
 `)
+
+// 平滑数据库迁移:为旧库补充新列
+try {
+  db.exec('ALTER TABLE materials ADD COLUMN url TEXT')
+} catch (_) {}
+
+try {
+  db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'")
+} catch (_) {}
+
+try {
+  db.exec('ALTER TABLE channels ADD COLUMN webhook_url TEXT')
+} catch (_) {}
+
+try {
+  db.exec('ALTER TABLE channels ADD COLUMN auto_push INTEGER NOT NULL DEFAULT 0')
+} catch (_) {}
 
 export function articleRowToJson(row) {
   if (!row) return null

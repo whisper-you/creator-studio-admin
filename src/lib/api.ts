@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import axios from 'axios'
+import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { articleSchema, type Article } from '@/features/articles/data/schema'
 
@@ -17,10 +18,43 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      // 登录和注册接口本身返回 401(账号密码错误)由表单捕获提示,不触发全站重置
+      const isAuthRequest =
+        error.config?.url?.includes('/auth/login') ||
+        error.config?.url?.includes('/auth/register')
+
+      if (!isAuthRequest) {
+        const currentToken = useAuthStore.getState().auth.accessToken
+        if (currentToken) {
+          useAuthStore.getState().auth.reset()
+          toast.error('登录状态已失效,请重新登录')
+          if (
+            typeof window !== 'undefined' &&
+            !window.location.pathname.startsWith('/sign-in') &&
+            !window.location.pathname.startsWith('/sign-up')
+          ) {
+            const redirect = encodeURIComponent(
+              window.location.pathname + window.location.search
+            )
+            window.location.href = `/sign-in?redirect=${redirect}`
+          }
+        }
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
 const articleListSchema = z.object({
   data: z.array(articleSchema),
   total: z.number(),
 })
+
+const roleSchema = z.enum(['admin', 'editor', 'author']).default('admin')
 
 const loginSchema = z.object({
   accessToken: z.string(),
@@ -28,6 +62,7 @@ const loginSchema = z.object({
     id: z.string(),
     email: z.email(),
     name: z.string(),
+    role: roleSchema,
   }),
 })
 
@@ -51,6 +86,9 @@ export const authApi = {
   async updateMe(name: string) {
     return meSchema.parse((await api.patch('/auth/me', { name })).data)
   },
+  async updateRole(role: 'admin' | 'editor' | 'author') {
+    return meSchema.parse((await api.patch('/auth/me', { role })).data)
+  },
 }
 
 export const articlesApi = {
@@ -68,6 +106,17 @@ export const articlesApi = {
       publishedAt: article.publishedAt?.toISOString() ?? null,
       createdAt: article.createdAt.toISOString(),
       updatedAt: article.updatedAt.toISOString(),
+    })
+  },
+  async createBulk(articles: Article[]): Promise<void> {
+    await api.post('/articles/bulk', {
+      articles: articles.map((a) => ({
+        ...a,
+        scheduledAt: a.scheduledAt?.toISOString() ?? null,
+        publishedAt: a.publishedAt?.toISOString() ?? null,
+        createdAt: a.createdAt.toISOString(),
+        updatedAt: a.updatedAt.toISOString(),
+      })),
     })
   },
   /**
@@ -102,6 +151,8 @@ const channelListSchema = z.object({
       name: z.string(),
       account: z.string().nullable().optional(),
       connected: z.boolean(),
+      webhookUrl: z.string().nullable().optional(),
+      autoPush: z.boolean().default(false),
     })
   ),
 })
@@ -111,10 +162,11 @@ const materialListSchema = z.object({
     z.object({
       id: z.number(),
       name: z.string(),
-      type: z.enum(['标题公式', '封面模板', '话题灵感', '数据报告']),
+      type: z.string(),
       scene: z.string(),
       usage: z.number(),
       status: z.enum(['active', 'updating', 'deprecated']),
+      url: z.string().nullable().optional(),
     })
   ),
 })
@@ -129,6 +181,7 @@ const meSchema = z.object({
   id: z.string(),
   email: z.string(),
   name: z.string(),
+  role: roleSchema,
 })
 
 const commentListSchema = z.object({
@@ -147,6 +200,25 @@ const commentListSchema = z.object({
 
 export type CommentItem = z.infer<typeof commentListSchema>['data'][number]
 
+const distributionLogSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.number(),
+      articleId: z.string(),
+      articleTitle: z.string(),
+      channelName: z.string(),
+      targetUrl: z.string().nullable().optional(),
+      status: z.string(),
+      responseCode: z.number(),
+      message: z.string().nullable().optional(),
+      createdAt: z.string(),
+    })
+  ),
+})
+
+export type DistributionLogItem =
+  z.infer<typeof distributionLogSchema>['data'][number]
+
 export const channelsApi = {
   async list() {
     return channelListSchema.parse((await api.get('/channels')).data).data
@@ -155,11 +227,62 @@ export const channelsApi = {
   async setConnected(name: string, connected: boolean) {
     await api.patch(`/channels/${encodeURIComponent(name)}`, { connected })
   },
+  async update(
+    name: string,
+    patch: {
+      connected?: boolean
+      account?: string | null
+      webhookUrl?: string | null
+      autoPush?: boolean
+    }
+  ) {
+    return (await api.patch(`/channels/${encodeURIComponent(name)}`, patch)).data
+  },
+  async testWebhook(name: string, webhookUrl?: string) {
+    const res = await api.post<{
+      ok: boolean
+      status: string
+      message: string
+      statusCode?: number
+    }>(`/channels/${encodeURIComponent(name)}/test-webhook`, { webhookUrl })
+    return res.data
+  },
+}
+
+export const distributionApi = {
+  async listLogs(articleId?: string): Promise<DistributionLogItem[]> {
+    const res = await api.get('/distribution/logs', {
+      params: articleId ? { articleId } : {},
+    })
+    return distributionLogSchema.parse(res.data).data
+  },
+  async dispatch(
+    articleId: string,
+    channels?: string[]
+  ): Promise<{
+    ok: boolean
+    results: Array<{ channel: string; status: string; message: string }>
+  }> {
+    const res = await api.post('/distribution/dispatch', { articleId, channels })
+    return res.data
+  },
 }
 
 export const materialsApi = {
   async list() {
     return materialListSchema.parse((await api.get('/materials')).data).data
+  },
+  async upload(payload: {
+    dataUrl: string
+    filename?: string
+    name?: string
+    scene?: string
+  }): Promise<{ url: string; filename: string }> {
+    const res = await api.post<{ url: string; filename: string }>(
+      '/materials/upload',
+      payload
+    )
+    return res.data
   },
 }
 

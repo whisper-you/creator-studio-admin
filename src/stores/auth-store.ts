@@ -3,11 +3,14 @@ import { getCookie, setCookie, removeCookie } from '@/lib/cookies'
 
 const ACCESS_TOKEN = 'thisisjustarandomstring'
 
+export type UserRole = 'admin' | 'editor' | 'author'
+
 /** 登录用户(与后端 /api/auth/me 返回一致;离线演示模式下由前端构造) */
 export interface AuthUser {
   id: string
   email: string
   name: string
+  role?: UserRole
 }
 
 interface AuthState {

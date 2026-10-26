@@ -156,6 +156,44 @@ articlesRouter.post('/', (req, res) => {
   res.status(201).json(articleRowToJson(db.prepare('SELECT * FROM articles WHERE id = ?').get(a.id)))
 })
 
+articlesRouter.post('/bulk', (req, res) => {
+  const schema = z.object({
+    articles: z.array(createSchema).min(1),
+  })
+  const parsed = schema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ message: '字段校验失败', issues: parsed.error.issues })
+  }
+  const now = new Date().toISOString()
+  const insert = db.prepare(`
+    INSERT INTO articles
+      (id, title, excerpt, content, status, category, tags, platforms,
+       views, likes, scheduled_at, published_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const run = withTransaction((items) => {
+    for (const a of items) {
+      insert.run(
+        a.id, a.title, a.excerpt, a.content, a.status, a.category,
+        JSON.stringify(a.tags), JSON.stringify(a.platforms),
+        a.views, a.likes,
+        a.scheduledAt?.toISOString() ?? null,
+        a.publishedAt?.toISOString() ?? null,
+        now, now
+      )
+    }
+  })
+  try {
+    run(parsed.data.articles)
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) {
+      return res.status(409).json({ message: '存在重复的文章 ID' })
+    }
+    throw err
+  }
+  res.status(201).json({ created: parsed.data.articles.length })
+})
+
 articlesRouter.patch('/bulk', (req, res) => {
   const schema = z.object({
     ids: z.array(z.string()).min(1),

@@ -1,7 +1,8 @@
 import { type Table } from '@tanstack/react-table'
-import { CircleArrowUp, Download, Trash2 } from 'lucide-react'
+import { CircleArrowUp, Download, FileSpreadsheet, FileText, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { downloadCsv } from '@/lib/download-csv'
+import { exportArticlesAsMarkdown } from '@/lib/export-article'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -45,7 +46,7 @@ export function ArticlesBulkActions<TData>({
     table.resetRowSelection()
   }
 
-  const handleBulkExport = () => {
+  const handleBulkExportCsv = () => {
     const selected = selectedRows.map((row) => row.original as Article)
     downloadCsv('articles.csv', [
       ['ID', '标题', '状态', '分类', '渠道', '阅读', '点赞'],
@@ -60,6 +61,14 @@ export function ArticlesBulkActions<TData>({
       ]),
     ])
     toast.success(`已导出 ${selected.length} 篇文章到 CSV。`)
+    table.resetRowSelection()
+  }
+
+  const handleBulkExportMarkdown = async () => {
+    const selected = selectedRows.map((row) => row.original as Article)
+    toast.info(`正在导出 ${selected.length} 篇 Markdown 文件...`)
+    await exportArticlesAsMarkdown(selected)
+    toast.success(`已完成 ${selected.length} 篇 Markdown 文件导出`)
     table.resetRowSelection()
   }
 
@@ -109,24 +118,37 @@ export function ArticlesBulkActions<TData>({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant='outline'
-              size='icon'
-              className='size-8'
-              aria-label='导出 CSV'
-              title='导出 CSV'
-              onClick={handleBulkExport}
-            >
-              <Download />
-              <span className='sr-only'>导出 CSV</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>导出 CSV</p>
-          </TooltipContent>
-        </Tooltip>
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant='outline'
+                  size='icon'
+                  className='size-8'
+                  aria-label='批量导出'
+                  title='批量导出'
+                >
+                  <Download />
+                  <span className='sr-only'>批量导出</span>
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>批量导出</p>
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent sideOffset={14} className='w-44'>
+            <DropdownMenuItem onClick={handleBulkExportMarkdown} className='gap-2'>
+              <FileText className='size-4 text-muted-foreground' />
+              <span>导出 Markdown (.md)</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleBulkExportCsv} className='gap-2'>
+              <FileSpreadsheet className='size-4 text-muted-foreground' />
+              <span>导出数据表格 (.csv)</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <Tooltip>
           <TooltipTrigger asChild>

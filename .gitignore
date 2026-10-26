@@ -33,4 +33,4 @@ dist-ssr
 **/__screenshots__/
 .vitest-attachments/
 server/data
-server/data
+uploads/

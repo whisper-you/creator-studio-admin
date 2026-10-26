@@ -1,6 +1,13 @@
 import { type ChangeEvent, useEffect, useState } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
-import { SlidersHorizontal, ArrowUpAZ, ArrowDownAZ } from 'lucide-react'
+import {
+  SlidersHorizontal,
+  ArrowUpAZ,
+  ArrowDownAZ,
+  Settings2,
+  Webhook,
+  Zap,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { channelsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -19,7 +26,8 @@ import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
-import { channels as seedChannels } from './data/channels'
+import { channels as seedChannels, type Channel } from './data/channels'
+import { ChannelWebhookDialog } from './components/channel-webhook-dialog'
 
 const route = getRouteApi('/_authenticated/channels/')
 
@@ -42,17 +50,17 @@ export function Channels() {
   const [sort, setSort] = useState(initSort)
   const [channelType, setChannelType] = useState(type)
   const [searchTerm, setSearchTerm] = useState(filter)
-  // 渠道列表:挂载时从后端拉取并持久化;后端不可用时降级为种子数据
-  const [channels, setChannels] = useState(seedChannels)
+  const [channels, setChannels] = useState<Channel[]>(seedChannels)
   const [connectedSet, setConnectedSet] = useState<Set<string>>(
     () => new Set(seedChannels.filter((c) => c.connected).map((c) => c.name))
   )
+  const [activeChannel, setActiveChannel] = useState<Channel | null>(null)
+  const [webhookDialogOpen, setWebhookDialogOpen] = useState(false)
 
   useEffect(() => {
     channelsApi
       .list()
       .then((rows) => {
-        // 图标/颜色等展示元数据在前端,按名称与后端状态合并
         setChannels((prev) =>
           prev.map((c) => {
             const row = rows.find((r) => r.name === c.name)
@@ -61,6 +69,8 @@ export function Channels() {
                   ...c,
                   connected: row.connected,
                   account: row.account ?? c.account,
+                  webhookUrl: row.webhookUrl ?? c.webhookUrl,
+                  autoPush: row.autoPush ?? c.autoPush,
                 }
               : c
           })
@@ -100,50 +110,59 @@ export function Channels() {
     })
   }
 
-  const handleTypeChange = (value: ChannelType) => {
-    setChannelType(value)
+  const handleTypeChange = (val: ChannelType) => {
+    setChannelType(val)
     navigate({
       search: (prev) => ({
         ...prev,
-        type: value === 'all' ? undefined : value,
+        type: val === 'all' ? undefined : val,
       }),
     })
   }
 
-  const handleSortChange = (sort: 'asc' | 'desc') => {
-    setSort(sort)
-    navigate({ search: (prev) => ({ ...prev, sort }) })
+  const handleSortChange = (val: 'asc' | 'desc') => {
+    setSort(val)
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        sort: val,
+      }),
+    })
   }
 
-  const handleToggleConnect = (name: string) => {
-    const nextConnected = !connectedSet.has(name)
-    // 乐观更新:先改本地,PATCH 失败再回滚
+  const handleToggleConnect = async (channelName: string) => {
+    const isConnected = connectedSet.has(channelName)
+    const nextState = !isConnected
+
     setConnectedSet((prev) => {
       const next = new Set(prev)
-      if (nextConnected) next.add(name)
-      else next.delete(name)
+      if (nextState) next.add(channelName)
+      else next.delete(channelName)
       return next
     })
-    toast.success(
-      nextConnected
-        ? `「${name}」绑定成功,可通过文章管理一键分发`
-        : `已解绑「${name}」`
+
+    try {
+      await channelsApi.setConnected(channelName, nextState)
+      toast.success(
+        nextState
+          ? `已成功绑定「${channelName}」渠道`
+          : `已解绑「${channelName}」渠道`
+      )
+    } catch (_err) {
+      toast.error('网络同步失败，已退回本地演示状态')
+    }
+  }
+
+  const handleChannelSaved = (name: string, updated: Partial<Channel>) => {
+    setChannels((prev) =>
+      prev.map((c) => (c.name === name ? { ...c, ...updated } : c))
     )
-    channelsApi.setConnected(name, nextConnected).catch(() => {
-      setConnectedSet((prev) => {
-        const next = new Set(prev)
-        if (nextConnected) next.delete(name)
-        else next.add(name)
-        return next
-      })
-      toast.error('绑定状态同步失败,已回滚(请确认后端是否启动)')
-    })
   }
 
   return (
     <>
       {/* ===== Top Heading ===== */}
-      <Header>
+      <Header fixed>
         <Search className='me-auto' />
         <ThemeSwitch />
         <ConfigDrawer />
@@ -155,7 +174,7 @@ export function Channels() {
         <div>
           <h1 className='text-2xl font-bold tracking-tight'>发布渠道</h1>
           <p className='text-muted-foreground'>
-            绑定你的发布渠道,发布文章时一键多平台分发。
+            绑定你的发布渠道,配置 Webhook 自动化,发布文章时一键多平台分发。
           </p>
         </div>
         <div className='my-4 flex items-end justify-between sm:my-0 sm:items-center'>
@@ -207,38 +226,85 @@ export function Channels() {
             return (
               <li
                 key={channel.name}
-                className='rounded-lg border p-4 hover:shadow-md'
+                className='rounded-lg border p-4 hover:shadow-md transition-shadow relative flex flex-col justify-between'
               >
-                <div className='mb-8 flex items-center justify-between'>
-                  <div
-                    className={`flex size-10 items-center justify-center rounded-lg bg-muted p-2`}
-                  >
-                    <channel.icon className={`size-6 ${channel.color}`} />
-                  </div>
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    className={`${connected ? 'border border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900' : ''}`}
-                    onClick={() => handleToggleConnect(channel.name)}
-                  >
-                    {connected ? '已绑定' : '绑定'}
-                  </Button>
-                </div>
                 <div>
-                  <h2 className='mb-1 flex items-center gap-2 font-semibold'>
-                    {channel.name}
-                    {channel.account && (
-                      <span className='text-xs font-normal text-muted-foreground'>
-                        {channel.account}
-                      </span>
-                    )}
-                  </h2>
-                  <p className='line-clamp-2 text-gray-500'>{channel.desc}</p>
+                  <div className='mb-4 flex items-center justify-between'>
+                    <div
+                      className={`flex size-10 items-center justify-center rounded-lg bg-muted p-2`}
+                    >
+                      <channel.icon className={`size-6 ${channel.color}`} />
+                    </div>
+                    <div className='flex items-center gap-1.5'>
+                      {connected && (
+                        <Button
+                          variant='ghost'
+                          size='icon'
+                          className='size-8 text-muted-foreground hover:text-foreground'
+                          title='配置 Webhook 与分发'
+                          onClick={() => {
+                            setActiveChannel(channel)
+                            setWebhookDialogOpen(true)
+                          }}
+                        >
+                          <Settings2 className='size-4' />
+                          <span className='sr-only'>配置</span>
+                        </Button>
+                      )}
+                      <Button
+                        variant='outline'
+                        size='sm'
+                        className={`${connected ? 'border border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950 dark:hover:bg-blue-900' : ''}`}
+                        onClick={() => handleToggleConnect(channel.name)}
+                      >
+                        {connected ? '已绑定' : '绑定'}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <h2 className='mb-1 flex items-center gap-2 font-semibold'>
+                      {channel.name}
+                      {channel.account && (
+                        <span className='text-xs font-normal text-muted-foreground'>
+                          {channel.account}
+                        </span>
+                      )}
+                    </h2>
+                    <p className='line-clamp-2 text-gray-500 text-xs leading-relaxed'>
+                      {channel.desc}
+                    </p>
+                  </div>
                 </div>
+
+                {connected && (
+                  <div className='mt-4 pt-2.5 border-t flex items-center justify-between text-[11px] text-muted-foreground'>
+                    <div className='flex items-center gap-1.5'>
+                      <Webhook className='size-3 text-muted-foreground' />
+                      <span className='truncate max-w-36'>
+                        {channel.webhookUrl ? '已配置 Webhook' : '模拟分发通道'}
+                      </span>
+                    </div>
+                    {channel.autoPush ? (
+                      <span className='flex items-center gap-0.5 text-emerald-600 font-medium'>
+                        <Zap className='size-3' />
+                        自动分发
+                      </span>
+                    ) : (
+                      <span className='text-muted-foreground'>手动分发</span>
+                    )}
+                  </div>
+                )}
               </li>
             )
           })}
         </ul>
+
+        <ChannelWebhookDialog
+          open={webhookDialogOpen}
+          onOpenChange={setWebhookDialogOpen}
+          channel={activeChannel}
+          onSaved={handleChannelSaved}
+        />
       </Main>
     </>
   )
