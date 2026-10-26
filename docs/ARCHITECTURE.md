@@ -36,7 +36,7 @@ creator-studio-admin/
 │   │   ├── article-status.js     # 文章状态机与流转规则（与前端 statusFlow 对齐）
 │   │   ├── audit.js              # 敏感操作审计日志写入与分页查询
 │   │   ├── jwt-secret.js         # JWT 密钥解析与生产环境启动校验
-│   │   ├── session.js            # 短时 access token + HttpOnly refresh token 轮换/吊销/设备会话列表
+│   │   ├── session.js            # 短时 access token(固定 HS256) + HttpOnly refresh token 轮换/吊销/设备会话列表
 │   │   ├── observability.js      # X-Request-Id、结构化访问日志与就绪检查
 │   │   ├── seed-policy.js        # 演示数据开关与生产管理员引导策略
 │   │   ├── security.js           # Helmet 安全头、CORS 白名单与认证端点限流

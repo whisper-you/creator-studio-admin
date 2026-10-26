@@ -7,6 +7,8 @@ import { resolveJwtSecret } from './jwt-secret.js'
 const JWT_SECRET = resolveJwtSecret()
 
 const ACCESS_TOKEN_TTL = process.env.ACCESS_TOKEN_TTL?.trim() || '15m'
+// 显式固定算法:阻止攻击者用其他算法(如 HS384/none)构造令牌
+const ACCESS_TOKEN_ALGORITHM = 'HS256'
 const REFRESH_TOKEN_TTL_DAYS = (() => {
   const n = Number(process.env.REFRESH_TOKEN_TTL_DAYS)
   return Number.isInteger(n) && n > 0 ? n : 30
@@ -21,8 +23,13 @@ export function signAccessToken(user) {
   return jwt.sign(
     { sub: String(user.id), email: user.email, ver: user.token_version ?? 1 },
     JWT_SECRET,
-    { expiresIn: ACCESS_TOKEN_TTL }
+    { algorithm: ACCESS_TOKEN_ALGORITHM, expiresIn: ACCESS_TOKEN_TTL }
   )
+}
+
+/** 只接受 HS256;其他算法或 alg=none 一律抛错,由调用方转为 401 */
+export function verifyAccessToken(token) {
+  return jwt.verify(token, JWT_SECRET, { algorithms: [ACCESS_TOKEN_ALGORITHM] })
 }
 
 export function hashRefreshToken(token) {

@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { compareSync, hashSync } from 'bcryptjs'
 import { Router } from 'express'
-import jwt from 'jsonwebtoken'
 import { db } from '../db/index.js'
 import { recordAudit } from '../services/audit.js'
 import { resolveJwtSecret } from '../services/jwt-secret.js'
@@ -19,10 +18,11 @@ import {
   sessionMeta,
   setRefreshCookie,
   signAccessToken,
+  verifyAccessToken,
 } from '../services/session.js'
 
 // 生产环境缺少强随机密钥时,在模块加载阶段直接抛错终止启动
-const JWT_SECRET = resolveJwtSecret()
+resolveJwtSecret()
 const USER_ROLES = ['admin', 'editor', 'author']
 
 const loginSchema = z.object({
@@ -60,7 +60,7 @@ export function requireAuth(req, res, next) {
   const token = header.startsWith('Bearer ') ? header.slice(7) : null
   if (!token) return res.status(401).json({ message: '未登录' })
   try {
-    const payload = jwt.verify(token, JWT_SECRET)
+    const payload = verifyAccessToken(token)
     const user = db
       .prepare(
         'SELECT id, email, name, role, token_version, disabled_at FROM users WHERE id = ?'

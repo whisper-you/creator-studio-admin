@@ -1,5 +1,6 @@
 // API 集成测试:真实 Express app + 临时目录 SQLite(node 环境跑)
 // 覆盖:登录鉴权、CRUD、PATCH 部分更新语义、批量操作、错误分支
+import jwt from 'jsonwebtoken'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -91,6 +92,39 @@ describe('文章接口鉴权', () => {
   it('未带 token 返回 401', async () => {
     const res = await fetch(`${baseUrl}/api/articles`)
     expect(res.status).toBe(401)
+  })
+})
+
+describe('access token 算法约束', () => {
+  it('拒绝非 HS256 的签名与 alg=none 伪造令牌', async () => {
+    const session = await (await login()).json()
+    const noneToken = [
+      Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString(
+        'base64url'
+      ),
+      Buffer.from(JSON.stringify({ sub: session.user.id, ver: 1 })).toString(
+        'base64url'
+      ),
+      '',
+    ].join('.')
+
+    const forged = [
+      jwt.sign({ sub: session.user.id, ver: 1 }, 'test-secret', {
+        algorithm: 'HS384',
+      }),
+      noneToken,
+    ]
+    for (const token of forged) {
+      const res = await fetch(`${baseUrl}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      expect(res.status).toBe(401)
+    }
+
+    const valid = await fetch(`${baseUrl}/api/auth/me`, {
+      headers: authed(session.accessToken),
+    })
+    expect(valid.status).toBe(200)
   })
 })
 

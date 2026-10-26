@@ -152,7 +152,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 1. **必须设置强随机 `JWT_SECRET`（至少 32 位）**。非生产环境未设置时会回退到内置开发密钥；生产环境缺失、使用示例占位值或长度不足时，服务会在启动阶段直接抛错拒绝运行。Docker 编排在未提供该变量时也会直接报错。
 2. **生产环境不要开启 `ALLOW_ROLE_SWITCH`**。该接口允许已登录用户把自己的角色改成 `admin`，仅用于演示。
 3. **演示数据默认只在非生产环境注入**。生产环境空库首次启动必须设置 `ADMIN_EMAIL` / `ADMIN_PASSWORD`（密码至少 8 位），否则服务会拒绝启动；不会创建演示文章、素材、评论或默认口令账号。渠道会写入基础定义，但默认全部为未连接状态。若显式设置 `SEED_DEMO_DATA=true`，会连同 `creator@studio.dev / creator123` 演示账号一起写入，仅限演示部署。
-4. access token 仍存在 JS 可读 Cookie 中，XSS 可在其 15 分钟有效期内窃取；生产环境应通过严格 CSP、依赖审计与输入转义降低风险。refresh token 已改为 HttpOnly，无法被脚本读取，且轮换 + 重放检测可限制泄露窗口。
+4. access token 仍存在 JS 可读 Cookie 中，XSS 可在其 15 分钟有效期内窃取；生产环境应通过严格 CSP、依赖审计与输入转义降低风险。refresh token 已改为 HttpOnly，无法被脚本读取，且轮换 + 重放检测可限制泄露窗口。access token 签发与校验均固定为 HS256，其他 HMAC 算法与 `alg=none` 伪造令牌会直接返回 401。
 5. **生产环境必须启用 HTTPS**。refresh Cookie 在 `NODE_ENV=production` 下带 `Secure`，纯 HTTP 部署会导致浏览器不保存 Cookie，表现为登录后立刻掉线。
 6. 改密、管理员重置密码、强制下线与停用账号都会吊销全部 refresh token 并递增 `token_version`，适合密码泄露、人员变动或账号封禁等场景紧急处置。管理员接口无法对自己执行，避免误操作导致当前管理会话立即失效。
 7. 前后端分域部署时，除设置 `CORS_ORIGINS` 外，还需保证浏览器允许携带凭据（服务端已开启 `credentials`，前端 axios 已设置 `withCredentials`），且 `Secure` Cookie 要求 HTTPS。
