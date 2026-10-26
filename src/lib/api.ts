@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import axios, { type InternalAxiosRequestConfig } from 'axios'
 import { toast } from 'sonner'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore, type UserRole } from '@/stores/auth-store'
 import { articleSchema, type Article } from '@/features/articles/data/schema'
 
 /**
@@ -315,6 +315,14 @@ export type UserListItem = z.infer<typeof userListItemSchema>
 export const usersApi = {
   async list(params: { page?: number; pageSize?: number; q?: string } = {}) {
     return userListSchema.parse((await api.get('/users', { params })).data)
+  },
+  /** 角色变更立即生效,无需目标用户重新登录 */
+  async setRole(id: string, role: UserRole) {
+    return (
+      await api.patch<{ ok: boolean; role: UserRole }>(`/users/${id}/role`, {
+        role,
+      })
+    ).data
   },
   /** 重置后目标用户全部会话立即失效 */
   async resetPassword(id: string, newPassword: string) {

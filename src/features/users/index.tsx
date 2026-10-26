@@ -7,6 +7,7 @@ import {
   KeyRound,
   LogOut,
   RefreshCw,
+  UserCog,
   Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -31,6 +32,13 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -79,6 +87,9 @@ export function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
 
+  const [roleTarget, setRoleTarget] = useState<UserListItem | null>(null)
+  const [nextRole, setNextRole] = useState<UserListItem['role']>('author')
+  const [savingRole, setSavingRole] = useState(false)
   const [resetTarget, setResetTarget] = useState<UserListItem | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [resetting, setResetting] = useState(false)
@@ -110,6 +121,24 @@ export function UsersPage() {
   }, [authorized, page, query, refreshKey])
 
   const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1)
+
+  const submitRole = async () => {
+    if (!roleTarget) return
+    setSavingRole(true)
+    try {
+      await usersApi.setRole(roleTarget.id, nextRole)
+      toast.success(
+        `已将 ${roleTarget.email} 的角色调整为${roleLabels[nextRole]}`
+      )
+      setRoleTarget(null)
+      setLoading(true)
+      setRefreshKey((k) => k + 1)
+    } catch (err) {
+      toast.error(errorMessageOf(err, '调整角色失败,请稍后重试'))
+    } finally {
+      setSavingRole(false)
+    }
+  }
 
   const submitReset = async (e: FormEvent) => {
     e.preventDefault()
@@ -242,7 +271,7 @@ export function UsersPage() {
                     <TableHead className='w-28'>角色</TableHead>
                     <TableHead className='w-28'>活跃会话</TableHead>
                     <TableHead className='w-44'>注册时间</TableHead>
-                    <TableHead className='w-52 text-end'>操作</TableHead>
+                    <TableHead className='w-64 text-end'>操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -290,6 +319,20 @@ export function UsersPage() {
                           </TableCell>
                           <TableCell>
                             <div className='flex justify-end gap-1'>
+                              <Button
+                                variant='outline'
+                                size='icon'
+                                className='size-8'
+                                disabled={isSelf}
+                                title='调整角色'
+                                aria-label={`调整 ${row.email} 的角色`}
+                                onClick={() => {
+                                  setNextRole(row.role)
+                                  setRoleTarget(row)
+                                }}
+                              >
+                                <UserCog className='size-3.5' />
+                              </Button>
                               <Button
                                 variant='outline'
                                 size='sm'
@@ -355,6 +398,58 @@ export function UsersPage() {
           </Card>
         )}
       </Main>
+
+      <Dialog
+        open={!!roleTarget}
+        onOpenChange={(open) => {
+          if (!open) setRoleTarget(null)
+        }}
+      >
+        <DialogContent className='max-w-sm'>
+          <DialogHeader>
+            <DialogTitle>调整角色</DialogTitle>
+            <DialogDescription>
+              为 {roleTarget?.email}{' '}
+              选择新角色。保存后立即生效,无需对方重新登录。
+            </DialogDescription>
+          </DialogHeader>
+          <div className='my-4 space-y-2'>
+            <Label htmlFor='user-role'>角色</Label>
+            <Select
+              value={nextRole}
+              onValueChange={(value) =>
+                setNextRole(value as UserListItem['role'])
+              }
+            >
+              <SelectTrigger id='user-role' className='w-full'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='admin'>管理员</SelectItem>
+                <SelectItem value='editor'>编辑</SelectItem>
+                <SelectItem value='author'>作者</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              type='button'
+              variant='outline'
+              onClick={() => setRoleTarget(null)}
+              disabled={savingRole}
+            >
+              取消
+            </Button>
+            <Button
+              type='button'
+              onClick={submitRole}
+              disabled={savingRole || nextRole === roleTarget?.role}
+            >
+              {savingRole ? '保存中…' : '保存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!resetTarget}

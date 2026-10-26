@@ -1639,6 +1639,13 @@ describe('管理员用户管理:重置密码与强制下线', () => {
       headers: authed(token),
     })
 
+  const setRole = (id, role, token = adminToken) =>
+    fetch(`${baseUrl}/api/users/${id}/role`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ role }),
+    })
+
   const getMe = (token) =>
     fetch(`${baseUrl}/api/auth/me`, { headers: authed(token) })
 
@@ -1676,6 +1683,7 @@ describe('管理员用户管理:重置密码与强制下线', () => {
       ).status
     ).toBe(403)
     expect((await forceLogout(target.id, authorToken)).status).toBe(403)
+    expect((await setRole(target.id, 'admin', authorToken)).status).toBe(403)
   })
 
   it('管理员可分页搜索用户,不返回密码哈希', async () => {
@@ -1694,6 +1702,28 @@ describe('管理员用户管理:重置密码与强制下线', () => {
 
     const all = await (await listUsers()).json()
     expect(all.data.some((u) => u.id === adminId)).toBe(true)
+  })
+
+  it('调整角色立即生效并写入审计,非法角色与自我保护被拒绝', async () => {
+    const res = await setRole(target.id, 'editor')
+    expect(res.status).toBe(200)
+    expect((await res.json()).role).toBe('editor')
+
+    // 角色以数据库为准实时读取,存量 access token 无需重签
+    const me = await (await getMe(target.token)).json()
+    expect(me.role).toBe('editor')
+
+    expect((await setRole(target.id, 'owner')).status).toBe(400)
+    expect((await setRole(adminId, 'author')).status).toBe(400)
+    expect((await setRole('999999', 'editor')).status).toBe(404)
+    // 自我保护后管理员角色保持 admin
+    expect((await (await getMe(adminToken)).json()).role).toBe('admin')
+
+    const logs = await listAudit('user.role_change')
+    const log = logs.find((row) => row.entityId === target.id)
+    expect(log).toBeTruthy()
+    expect(log.detail).toMatchObject({ from: 'author', to: 'editor' })
+    expect(log.actorEmail).toBe('creator@studio.dev')
   })
 
   it('重置密码:参数校验、目标不存在与自我保护', async () => {

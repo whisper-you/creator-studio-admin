@@ -133,7 +133,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - 每次调用 `POST /api/auth/refresh` 都会轮换 refresh token；已轮换的旧 token 被再次使用视为泄露重放，会吊销该用户全部会话并写入 `auth.refresh_reuse` 审计。
 - `POST /api/auth/logout` 吊销当前 refresh token 并清除 Cookie；改密会吊销该用户全部 refresh token（同时递增 `token_version` 让存量 access token 失效），并为当前会话补发新 token。
 - 前端在请求返回 401 时自动单飞刷新并重放原请求；刷新失败才清理登录态并跳转登录页。页面刷新后若 access token 已过期，也会静默续期，无需用户重新登录。
-- 管理员用户管理：`GET /api/users` 分页/搜索账号并返回活跃会话数；`POST /api/users/:id/reset-password` 设置新密码；`POST /api/users/:id/force-logout` 强制下线。两者都会递增 `token_version`、吊销目标用户全部 refresh token，并分别写入 `user.reset_password` / `user.force_logout` 审计。为避免管理员误伤自己，这两个接口禁止对自己执行（改自己密码请走个人设置，结束自己的会话请走登出）。
+- 管理员用户管理：`GET /api/users` 分页/搜索账号并返回活跃会话数；`PATCH /api/users/:id/role` 调整角色；`POST /api/users/:id/reset-password` 设置新密码；`POST /api/users/:id/force-logout` 强制下线。角色调整立即生效并写入 `user.role_change` 审计；重置密码与强制下线都会递增 `token_version`、吊销目标用户全部 refresh token，并分别写入 `user.reset_password` / `user.force_logout` 审计。为避免管理员误伤自己，这三个接口禁止对自己执行（改自己密码请走个人设置，结束自己的会话请走登出）。
 - 服务端尚未提供忘记密码邮件重置与登录设备列表；`/api/auth/me` 仅支持修改昵称与角色。
 - 公开注册固定创建 `author` 用户。
 - 认证端点已限流：登录 30 次/15 分钟、注册 5 次/小时、改密 10 次/15 分钟、刷新 120 次/15 分钟，按客户端 IP 计数；单进程内存实现，重启清零。阈值可通过 `AUTH_RATE_LIMIT_*` / `REGISTER_RATE_LIMIT_*` / `CHANGE_PASSWORD_RATE_LIMIT_MAX` / `REFRESH_RATE_LIMIT_MAX` 调整。

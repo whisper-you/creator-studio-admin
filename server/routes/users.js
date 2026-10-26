@@ -69,6 +69,42 @@ const findUser = (rawId) => {
   )
 }
 
+const roleSchema = z.object({
+  role: z.enum(['admin', 'editor', 'author'], {
+    message: '角色参数不合法',
+  }),
+})
+
+/** 调整角色:requireAuth 每次从数据库读取角色,变更立即生效 */
+usersRouter.patch('/:id/role', (req, res) => {
+  const target = findUser(req.params.id)
+  if (!target) return res.status(404).json({ message: '用户不存在' })
+  if (String(target.id) === req.userId) {
+    return res.status(400).json({ message: '不能通过管理接口修改自己的角色' })
+  }
+
+  const parsed = roleSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ message: parsed.error.issues[0]?.message ?? '角色参数不合法' })
+  }
+
+  const from = target.role || 'author'
+  const to = parsed.data.role
+  if (from !== to) {
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(to, target.id)
+    recordAudit(req, {
+      action: 'user.role_change',
+      entityType: 'user',
+      entityId: target.id,
+      detail: { email: target.email, from, to },
+    })
+  }
+
+  res.json({ ok: true, role: to })
+})
+
 const resetPasswordSchema = z.object({
   newPassword: z
     .string()
