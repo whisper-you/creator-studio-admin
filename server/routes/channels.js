@@ -1,8 +1,9 @@
-import { Router } from 'express'
 import { z } from 'zod'
+import { Router } from 'express'
 import { db } from '../db/index.js'
-import { requireAuth } from './auth.js'
+import { recordAudit } from '../services/audit.js'
 import { testWebhook } from '../services/distribution.js'
+import { requireAuth, requireRole } from './auth.js'
 
 export const channelsRouter = Router()
 channelsRouter.use(requireAuth)
@@ -27,6 +28,7 @@ channelsRouter.patch(
     req.params.name = decodeURIComponent(req.params.name)
     next()
   },
+  requireRole('admin', 'editor'),
   (req, res) => {
     const parsed = z
       .object({
@@ -41,23 +43,50 @@ channelsRouter.patch(
     }
 
     const { connected, account, webhookUrl, autoPush } = parsed.data
-    const current = db.prepare('SELECT * FROM channels WHERE name = ?').get(req.params.name)
+    const current = db
+      .prepare('SELECT * FROM channels WHERE name = ?')
+      .get(req.params.name)
     if (!current) {
       return res.status(404).json({ message: '渠道不存在' })
     }
 
-    const nextConnected = connected !== undefined ? (connected ? 1 : 0) : current.connected
+    const nextConnected =
+      connected !== undefined ? (connected ? 1 : 0) : current.connected
     const nextAccount = account !== undefined ? account : current.account
-    const nextWebhookUrl = webhookUrl !== undefined ? webhookUrl : current.webhook_url
-    const nextAutoPush = autoPush !== undefined ? (autoPush ? 1 : 0) : current.auto_push
+    const nextWebhookUrl =
+      webhookUrl !== undefined ? webhookUrl : current.webhook_url
+    const nextAutoPush =
+      autoPush !== undefined ? (autoPush ? 1 : 0) : current.auto_push
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE channels
       SET connected = ?, account = ?, webhook_url = ?, auto_push = ?
       WHERE name = ?
-    `).run(nextConnected, nextAccount, nextWebhookUrl, nextAutoPush, req.params.name)
+    `
+    ).run(
+      nextConnected,
+      nextAccount,
+      nextWebhookUrl,
+      nextAutoPush,
+      req.params.name
+    )
 
-    const updated = db.prepare('SELECT * FROM channels WHERE name = ?').get(req.params.name)
+    // 只记录变更字段名与开关值,避免把含密钥的 Webhook 地址写进审计日志
+    recordAudit(req, {
+      action: 'channel.update',
+      entityType: 'channel',
+      entityId: req.params.name,
+      detail: {
+        fields: Object.keys(parsed.data),
+        connected: !!nextConnected,
+        autoPush: !!nextAutoPush,
+      },
+    })
+
+    const updated = db
+      .prepare('SELECT * FROM channels WHERE name = ?')
+      .get(req.params.name)
     res.json({
       name: updated.name,
       account: updated.account ?? undefined,
@@ -75,14 +104,18 @@ channelsRouter.post(
     req.params.name = decodeURIComponent(req.params.name)
     next()
   },
+  requireRole('admin', 'editor'),
   async (req, res) => {
     const { webhookUrl } = req.body || {}
-    const channel = db.prepare('SELECT * FROM channels WHERE name = ?').get(req.params.name)
+    const channel = db
+      .prepare('SELECT * FROM channels WHERE name = ?')
+      .get(req.params.name)
     if (!channel) {
       return res.status(404).json({ message: '渠道不存在' })
     }
 
-    const urlToTest = webhookUrl !== undefined ? webhookUrl : channel.webhook_url
+    const urlToTest =
+      webhookUrl !== undefined ? webhookUrl : channel.webhook_url
     const result = await testWebhook(channel.name, urlToTest)
     res.json(result)
   }

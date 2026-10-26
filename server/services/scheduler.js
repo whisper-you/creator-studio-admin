@@ -23,7 +23,8 @@ export function checkAndPublishScheduledArticles() {
     SET status = 'published',
         published_at = ?,
         scheduled_at = NULL,
-        updated_at = ?
+        updated_at = ?,
+        version = version + 1
     WHERE id = ?
   `)
 
@@ -41,9 +42,13 @@ export function checkAndPublishScheduledArticles() {
   // 触发自动发布后的渠道分发 (Webhook / 模拟推送)
   for (const item of dueArticles) {
     try {
-      const fullRow = db.prepare('SELECT * FROM articles WHERE id = ?').get(item.id)
+      const fullRow = db
+        .prepare('SELECT * FROM articles WHERE id = ?')
+        .get(item.id)
       if (fullRow) {
-        dispatchArticle(articleRowToJson(fullRow)).catch((err) =>
+        dispatchArticle(articleRowToJson(fullRow), null, {
+          autoPushOnly: true,
+        }).catch((err) =>
           console.error(`[scheduler] 文章 ${item.id} 分发失败:`, err)
         )
       }

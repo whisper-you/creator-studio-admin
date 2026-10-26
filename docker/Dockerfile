@@ -23,4 +23,7 @@ COPY --from=build /app/server ./server
 # SQLite 数据与图床上传图片落在这两个目录,部署时挂 volume 持久化
 VOLUME ["/app/server/data", "/app/uploads"]
 EXPOSE 3000
+# 就绪探针:数据库可查询且上传目录可写
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.API_PORT||3000)+'/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server/index.js"]

@@ -6,7 +6,13 @@ services:
     ports:
       - '3000:3000'
     environment:
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: '${JWT_SECRET:?请先设置 JWT_SECRET(至少 32 位随机字符串)}'
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-}
     volumes:
       - sqlite-data:/app/server/data
       - uploads-data:/app/uploads

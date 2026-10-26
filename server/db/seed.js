@@ -38,11 +38,28 @@ const TITLE_POOL = [
 ]
 
 const TAG_POOL = [
-  'AI', '前端', 'React', '效率工具', '副业', '写作',
-  '独立开发', '开源', '职业发展', '设计', '数据分析', '出海',
+  'AI',
+  '前端',
+  'React',
+  '效率工具',
+  '副业',
+  '写作',
+  '独立开发',
+  '开源',
+  '职业发展',
+  '设计',
+  '数据分析',
+  '出海',
 ]
 
-const PLATFORMS = ['website', 'wechat', 'zhihu', 'xiaohongshu', 'juejin', 'bilibili']
+const PLATFORMS = [
+  'website',
+  'wechat',
+  'zhihu',
+  'xiaohongshu',
+  'juejin',
+  'bilibili',
+]
 
 // mulberry32:确定性伪随机
 function mulberry32(seed) {
@@ -66,24 +83,30 @@ export function buildSeedArticles() {
   const rnd = mulberry32(20261026)
   const pick = (arr) => arr[Math.floor(rnd() * arr.length)]
   const int = (min, max) => min + Math.floor(rnd() * (max - min + 1))
-  const sample = (arr, n) =>
-    [...arr].sort(() => rnd() - 0.5).slice(0, n)
+  const sample = (arr, n) => [...arr].sort(() => rnd() - 0.5).slice(0, n)
 
   return Array.from({ length: 56 }, (_, i) => {
     const [title, category] = TITLE_POOL[i % TITLE_POOL.length]
     const status =
-      i < 20 ? 'published'
-      : i < 30 ? 'draft'
-      : i < 36 ? 'scheduled'
-      : i < 44 ? 'in_review'
-      : i < 50 ? 'archived'
-      : 'draft'
+      i < 20
+        ? 'published'
+        : i < 30
+          ? 'draft'
+          : i < 36
+            ? 'scheduled'
+            : i < 44
+              ? 'in_review'
+              : i < 50
+                ? 'archived'
+                : 'draft'
 
     const platforms = sample(PLATFORMS, int(1, 4))
     const views =
-      status === 'published' ? int(800, 52000)
-      : status === 'archived' ? int(300, 12000)
-      : 0
+      status === 'published'
+        ? int(800, 52000)
+        : status === 'archived'
+          ? int(300, 12000)
+          : 0
 
     return {
       id: `ART-${String(i + 1).padStart(3, '0')}`,
@@ -100,7 +123,8 @@ export function buildSeedArticles() {
         status === 'scheduled'
           ? daysFromNow(int(-5, 8), pick([12, 18, 20, 21]))
           : null,
-      publishedAt: status === 'published' ? daysFromNow(-int(1, 60), int(9, 21)) : null,
+      publishedAt:
+        status === 'published' ? daysFromNow(-int(1, 60), int(9, 21)) : null,
       createdAt: daysFromNow(-int(10, 90), int(8, 22)),
       updatedAt: daysFromNow(-int(0, 7), int(8, 22)),
     }

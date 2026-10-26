@@ -8,6 +8,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 // 必须在 import app 之前设置:db.js 在模块加载时建库
 process.env.DATA_DIR = mkdtempSync(join(tmpdir(), 'cs-api-test-'))
 process.env.JWT_SECRET = 'test-secret'
+// 集成用例会集中触发登录/注册,调高限流阈值避免误伤;限流本身由 security.test.js 覆盖
+process.env.AUTH_RATE_LIMIT_MAX = '10000'
+process.env.REGISTER_RATE_LIMIT_MAX = '10000'
+process.env.CHANGE_PASSWORD_RATE_LIMIT_MAX = '10000'
 
 const { app, checkAndPublishScheduledArticles } = await import('../index.js')
 
@@ -155,10 +159,11 @@ describe('文章 CRUD 全流程', () => {
     const res = await fetch(`${baseUrl}/api/articles/ART-TEST-1`, {
       method: 'PATCH',
       headers: authed(token),
-      body: JSON.stringify({ status: 'published' }),
+      body: JSON.stringify({ excerpt: '摘要(已更新)' }),
     })
     const body = await res.json()
-    expect(body.status).toBe('published')
+    expect(body.excerpt).toBe('摘要(已更新)')
+    expect(body.status).toBe('draft')
     // 关键回归:PATCH 单字段不应清掉 tags/platforms
     expect(body.tags).toEqual(['测试'])
     expect(body.platforms).toEqual(['website'])
@@ -196,13 +201,16 @@ describe('文章 CRUD 全流程', () => {
     const res = await fetch(`${baseUrl}/api/articles/bulk`, {
       method: 'PATCH',
       headers: authed(token),
-      body: JSON.stringify({ ids: ['ART-TEST-1'], patch: { status: 'archived' } }),
+      body: JSON.stringify({
+        ids: ['ART-TEST-1'],
+        patch: { status: 'in_review' },
+      }),
     })
     expect(res.status).toBe(200)
     const check = await fetch(`${baseUrl}/api/articles?filter=ART-TEST-1`, {
       headers: authed(token),
     })
-    expect((await check.json()).data[0]?.status).toBe('archived')
+    expect((await check.json()).data[0]?.status).toBe('in_review')
   })
 
   it('POST bulk-delete 批量删除', async () => {
@@ -273,9 +281,12 @@ describe('文章 CRUD 全流程', () => {
     const published = checkAndPublishScheduledArticles()
     expect(published.some((a) => a.id === 'ART-SCHED-AUTO')).toBe(true)
 
-    const checkRes = await fetch(`${baseUrl}/api/articles?filter=ART-SCHED-AUTO`, {
-      headers: authed(token),
-    })
+    const checkRes = await fetch(
+      `${baseUrl}/api/articles?filter=ART-SCHED-AUTO`,
+      {
+        headers: authed(token),
+      }
+    )
     const checkData = await checkRes.json()
     const autoArticle = checkData.data.find((a) => a.id === 'ART-SCHED-AUTO')
     expect(autoArticle?.status).toBe('published')
@@ -287,6 +298,302 @@ describe('文章 CRUD 全流程', () => {
       method: 'DELETE',
       headers: authed(token),
     })
+  })
+})
+
+describe('文章乐观锁:版本校验与冲突回滚', () => {
+  let token
+  const ids = ['ART-OPT-A', 'ART-OPT-B']
+
+  beforeAll(async () => {
+    token = (await (await login()).json()).accessToken
+    for (const id of ids) {
+      await fetch(`${baseUrl}/api/articles`, {
+        method: 'POST',
+        headers: authed(token),
+        body: JSON.stringify({
+          id,
+          title: `乐观锁-${id}`,
+          excerpt: '',
+          content: '',
+          status: 'draft',
+          category: 'tech',
+        }),
+      })
+    }
+  })
+
+  afterAll(async () => {
+    await fetch(`${baseUrl}/api/articles/bulk-delete`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({ ids }),
+    })
+  })
+
+  const patch = (id, body) =>
+    fetch(`${baseUrl}/api/articles/${id}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify(body),
+    })
+
+  it('新建文章 version 从 1 开始,写入成功后自增', async () => {
+    const created = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-A`, {
+      headers: authed(token),
+    })
+    expect((await created.json()).data[0]?.version).toBe(1)
+
+    const res = await patch('ART-OPT-A', { version: 1, excerpt: '第一次修改' })
+    expect(res.status).toBe(200)
+    expect((await res.json()).version).toBe(2)
+  })
+
+  it('版本过期返回 409 + currentVersion,且不落库', async () => {
+    const res = await patch('ART-OPT-A', {
+      version: 1,
+      excerpt: '过期写入',
+    })
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.currentVersion).toBe(2)
+
+    const check = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-A`, {
+      headers: authed(token),
+    })
+    expect((await check.json()).data[0]?.excerpt).toBe('第一次修改')
+  })
+
+  it('带最新版本继续写入成功', async () => {
+    const res = await patch('ART-OPT-A', { version: 2, excerpt: '第二次修改' })
+    expect(res.status).toBe(200)
+    expect((await res.json()).version).toBe(3)
+  })
+
+  it('批量写入任一版本过期则整批拒绝', async () => {
+    const before = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-`, {
+      headers: authed(token),
+    })
+    const snapshot = (await before.json()).data
+    const versionOf = (id) => snapshot.find((a) => a.id === id)?.version ?? 1
+
+    const res = await fetch(`${baseUrl}/api/articles/bulk`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({
+        ids,
+        patch: { likes: 5 },
+        // ART-OPT-B 的版本故意写错
+        versions: { 'ART-OPT-A': versionOf('ART-OPT-A'), 'ART-OPT-B': 99 },
+      }),
+    })
+    expect(res.status).toBe(409)
+    expect((await res.json()).currentVersion).toBe(1)
+
+    const after = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-`, {
+      headers: authed(token),
+    })
+    const rows = (await after.json()).data
+    // 整批回滚:ART-OPT-A 的 likes 不应被更新
+    expect(rows.find((a) => a.id === 'ART-OPT-A')?.likes).toBe(0)
+  })
+
+  it('批量写入版本全部匹配时成功并各自自增', async () => {
+    const list = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-`, {
+      headers: authed(token),
+    })
+    const rows = (await list.json()).data
+    const versions = Object.fromEntries(rows.map((a) => [a.id, a.version]))
+
+    const res = await fetch(`${baseUrl}/api/articles/bulk`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ ids, patch: { likes: 7 }, versions }),
+    })
+    expect(res.status).toBe(200)
+
+    const after = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-`, {
+      headers: authed(token),
+    })
+    const updated = (await after.json()).data
+    for (const row of updated) {
+      expect(row.likes).toBe(7)
+      expect(row.version).toBe(versions[row.id] + 1)
+    }
+  })
+
+  it('阅读上报不影响版本号', async () => {
+    const list = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-A`, {
+      headers: authed(token),
+    })
+    const before = (await list.json()).data[0]
+
+    await fetch(`${baseUrl}/api/articles/ART-OPT-A/view`, {
+      method: 'POST',
+      headers: authed(token),
+    })
+
+    const after = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-A`, {
+      headers: authed(token),
+    })
+    const row = (await after.json()).data[0]
+    expect(row.views).toBe(before.views + 1)
+    expect(row.version).toBe(before.version)
+  })
+
+  it('调度器自动发布也会递增版本号', async () => {
+    await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        id: 'ART-OPT-SCHED',
+        title: '乐观锁-调度',
+        excerpt: '',
+        content: '',
+        status: 'scheduled',
+        category: 'tech',
+        scheduledAt: new Date(Date.now() - 60000).toISOString(),
+      }),
+    })
+    checkAndPublishScheduledArticles()
+
+    const check = await fetch(`${baseUrl}/api/articles?filter=ART-OPT-SCHED`, {
+      headers: authed(token),
+    })
+    expect((await check.json()).data[0]?.version).toBe(2)
+
+    await fetch(`${baseUrl}/api/articles/ART-OPT-SCHED`, {
+      method: 'DELETE',
+      headers: authed(token),
+    })
+  })
+})
+
+describe('服务端状态机:非法流转拦截', () => {
+  let token
+
+  beforeAll(async () => {
+    token = (await (await login()).json()).accessToken
+  })
+
+  const createArticle = (id, status) =>
+    fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        id,
+        title: `状态机-${id}`,
+        excerpt: '',
+        content: '',
+        status,
+        category: 'tech',
+      }),
+    })
+
+  const patchArticle = (id, body) =>
+    fetch(`${baseUrl}/api/articles/${id}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify(body),
+    })
+
+  const getArticle = async (id) => {
+    const res = await fetch(`${baseUrl}/api/articles?filter=${id}`, {
+      headers: authed(token),
+    })
+    return (await res.json()).data.find((a) => a.id === id)
+  }
+
+  it('草稿不能直接跳到已发布或已归档', async () => {
+    expect((await createArticle('ART-SM-1', 'draft')).status).toBe(201)
+
+    const publish = await patchArticle('ART-SM-1', { status: 'published' })
+    expect(publish.status).toBe(409)
+    expect((await publish.json()).message).toContain('草稿 → 已发布')
+
+    const archive = await patchArticle('ART-SM-1', { status: 'archived' })
+    expect(archive.status).toBe(409)
+
+    expect((await getArticle('ART-SM-1'))?.status).toBe('draft')
+  })
+
+  it('允许完整链路:草稿 → 审核中 → 已排期 → 已发布 → 已归档 → 草稿', async () => {
+    const scheduledAt = new Date(Date.now() + 3600_000).toISOString()
+
+    expect(
+      (await patchArticle('ART-SM-1', { status: 'in_review' })).status
+    ).toBe(200)
+    expect(
+      (
+        await patchArticle('ART-SM-1', {
+          status: 'scheduled',
+          scheduledAt,
+        })
+      ).status
+    ).toBe(200)
+    expect(
+      (await patchArticle('ART-SM-1', { status: 'published' })).status
+    ).toBe(200)
+    expect(
+      (await patchArticle('ART-SM-1', { status: 'archived' })).status
+    ).toBe(200)
+    expect((await patchArticle('ART-SM-1', { status: 'draft' })).status).toBe(
+      200
+    )
+    expect((await getArticle('ART-SM-1'))?.status).toBe('draft')
+  })
+
+  it('保持原状态仅编辑内容不会被判为非法流转', async () => {
+    const res = await patchArticle('ART-SM-1', {
+      title: '仅改标题',
+      status: 'draft',
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()).title).toBe('仅改标题')
+  })
+
+  it('排期是横切动作:已发布文章可直接重新排期', async () => {
+    expect((await createArticle('ART-SM-2', 'published')).status).toBe(201)
+
+    const res = await patchArticle('ART-SM-2', {
+      status: 'scheduled',
+      scheduledAt: new Date(Date.now() + 3600_000).toISOString(),
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()).status).toBe('scheduled')
+  })
+
+  it('批量更新含非法流转时整体拒绝且不落库', async () => {
+    expect((await createArticle('ART-SM-3', 'draft')).status).toBe(201)
+    expect((await createArticle('ART-SM-4', 'published')).status).toBe(201)
+
+    const res = await fetch(`${baseUrl}/api/articles/bulk`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({
+        ids: ['ART-SM-3', 'ART-SM-4'],
+        patch: { status: 'archived' },
+      }),
+    })
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.message).toContain('ART-SM-3')
+    expect(body.message).toContain('草稿 → 已归档')
+
+    // 事务性:同一批次里合法的文章也不能被部分更新
+    expect((await getArticle('ART-SM-3'))?.status).toBe('draft')
+    expect((await getArticle('ART-SM-4'))?.status).toBe('published')
+  })
+
+  it('清理状态机测试数据', async () => {
+    const res = await fetch(`${baseUrl}/api/articles/bulk-delete`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        ids: ['ART-SM-1', 'ART-SM-2', 'ART-SM-3', 'ART-SM-4'],
+      }),
+    })
+    expect(res.status).toBe(200)
   })
 })
 
@@ -318,7 +625,9 @@ describe('渠道接口', () => {
     expect((await res.json()).connected).toBe(true)
 
     // 再读一次,确认落库
-    const list = await (await fetch(`${baseUrl}/api/channels`, { headers: authed(token) })).json()
+    const list = await (
+      await fetch(`${baseUrl}/api/channels`, { headers: authed(token) })
+    ).json()
     expect(list.data.find((c) => c.name === '小红书').connected).toBe(true)
 
     // 还原,避免影响其他用例
@@ -398,6 +707,64 @@ describe('素材与统计接口', () => {
     expect(res.status).toBe(400)
   })
 
+  it('拒绝 SVG 上传(可内嵌脚本)', async () => {
+    const svg = Buffer.from('<svg onload="alert(1)"></svg>').toString('base64')
+    const res = await fetch(`${baseUrl}/api/materials/upload`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        dataUrl: `data:image/svg+xml;base64,${svg}`,
+        filename: 'evil.svg',
+      }),
+    })
+    expect(res.status).toBe(400)
+    expect((await res.json()).message).toContain('PNG / JPEG / WebP / GIF')
+  })
+
+  it('拒绝内容与声明格式不一致的图片', async () => {
+    // 真实 PNG 内容,却声明成 JPEG
+    const tinyPng =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const res = await fetch(`${baseUrl}/api/materials/upload`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        dataUrl: `data:image/jpeg;base64,${tinyPng}`,
+        filename: 'fake.jpg',
+      }),
+    })
+    expect(res.status).toBe(400)
+    expect((await res.json()).message).toContain('实际格式与声明不一致')
+  })
+
+  it('拒绝无有效文件头的内容', async () => {
+    const fakePng = Buffer.from('not a real png').toString('base64')
+    const res = await fetch(`${baseUrl}/api/materials/upload`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        dataUrl: `data:image/png;base64,${fakePng}`,
+        filename: 'fake.png',
+      }),
+    })
+    expect(res.status).toBe(400)
+    expect((await res.json()).message).toContain('图片内容校验失败')
+  })
+
+  it('拒绝超过 5MB 的图片', async () => {
+    const big = Buffer.alloc(5 * 1024 * 1024 + 512).toString('base64')
+    const res = await fetch(`${baseUrl}/api/materials/upload`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        dataUrl: `data:image/png;base64,${big}`,
+        filename: 'too-big.png',
+      }),
+    })
+    expect(res.status).toBe(413)
+    expect((await res.json()).message).toContain('5MB')
+  })
+
   it('GET /api/stats/trend 返回确定性时序', async () => {
     const res = await fetch(`${baseUrl}/api/stats/trend?days=30`, {
       headers: authed(token),
@@ -424,7 +791,10 @@ describe('注册与个人资料', () => {
     })
     expect(res.status).toBe(201)
     const body = await res.json()
-    expect(body.user).toMatchObject({ email: 'new-user@test.dev', name: '测试新人' })
+    expect(body.user).toMatchObject({
+      email: 'new-user@test.dev',
+      name: '测试新人',
+    })
     expect(body.accessToken).toBeTruthy()
   })
 
@@ -452,6 +822,98 @@ describe('注册与个人资料', () => {
   })
 })
 
+describe('密码修改与 token 版本吊销', () => {
+  const email = 'pw-user@test.dev'
+  const oldPassword = 'password123'
+  const newPassword = 'brand-new-pass1'
+  let token
+
+  const changePassword = (body, bearer = token) =>
+    fetch(`${baseUrl}/api/auth/change-password`, {
+      method: 'POST',
+      headers: authed(bearer),
+      body: JSON.stringify(body),
+    })
+
+  const getMe = (bearer) =>
+    fetch(`${baseUrl}/api/auth/me`, { headers: authed(bearer) })
+
+  beforeAll(async () => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: oldPassword, name: '改密测试' }),
+    })
+    token = (await res.json()).accessToken
+  })
+
+  it('未登录返回 401', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: oldPassword, newPassword }),
+    })
+    expect(res.status).toBe(401)
+  })
+
+  it('当前密码错误返回 400,密码保持不变', async () => {
+    const res = await changePassword({
+      currentPassword: 'wrong-password',
+      newPassword,
+    })
+    expect(res.status).toBe(400)
+    expect((await res.json()).message).toBe('当前密码不正确')
+
+    // 原密码仍可登录
+    expect((await login(email, oldPassword)).status).toBe(200)
+  })
+
+  it('新密码过短返回 400', async () => {
+    const res = await changePassword({
+      currentPassword: oldPassword,
+      newPassword: 'short1',
+    })
+    expect(res.status).toBe(400)
+    expect((await res.json()).message).toContain('8 个字符')
+  })
+
+  it('新密码与当前密码相同返回 400', async () => {
+    const res = await changePassword({
+      currentPassword: oldPassword,
+      newPassword: oldPassword,
+    })
+    expect(res.status).toBe(400)
+    expect((await res.json()).message).toContain('不能与当前密码相同')
+  })
+
+  it('改密成功:返回新 token,旧 token 立即失效', async () => {
+    const res = await changePassword({
+      currentPassword: oldPassword,
+      newPassword,
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.accessToken).toBeTruthy()
+    expect(body.user.email).toBe(email)
+
+    // 旧 token 因 token_version 不匹配被拒绝
+    const stale = await getMe(token)
+    expect(stale.status).toBe(401)
+    expect((await stale.json()).message).toContain('登录状态已失效')
+
+    // 本次返回的新 token 继续可用
+    expect((await getMe(body.accessToken)).status).toBe(200)
+    token = body.accessToken
+  })
+
+  it('旧密码无法再登录,新密码可登录', async () => {
+    expect((await login(email, oldPassword)).status).toBe(401)
+    const res = await login(email, newPassword)
+    expect(res.status).toBe(200)
+    expect((await res.json()).user.email).toBe(email)
+  })
+})
+
 describe('评论接口', () => {
   let token
 
@@ -466,9 +928,7 @@ describe('评论接口', () => {
     const body = await res.json()
     expect(body.data.length).toBeGreaterThan(5)
     expect(body.data.every((c) => c.articleTitle)).toBeTruthy()
-    expect(
-      body.data.some((c) => c.status === 'pending')
-    ).toBe(true)
+    expect(body.data.some((c) => c.status === 'pending')).toBe(true)
   })
 
   it('GET ?status=pending 只返回待审', async () => {
@@ -482,24 +942,33 @@ describe('评论接口', () => {
   })
 
   it('PATCH 审核通过并落库', async () => {
-    const res = await fetch(`${baseUrl}/api/comments/${globalThis.__pendingId}`, {
-      method: 'PATCH',
-      headers: authed(token),
-      body: JSON.stringify({ status: 'approved' }),
-    })
+    const res = await fetch(
+      `${baseUrl}/api/comments/${globalThis.__pendingId}`,
+      {
+        method: 'PATCH',
+        headers: authed(token),
+        body: JSON.stringify({ status: 'approved' }),
+      }
+    )
     expect((await res.json()).status).toBe('approved')
   })
 
   it('DELETE 删除评论', async () => {
-    const res = await fetch(`${baseUrl}/api/comments/${globalThis.__pendingId}`, {
-      method: 'DELETE',
-      headers: authed(token),
-    })
+    const res = await fetch(
+      `${baseUrl}/api/comments/${globalThis.__pendingId}`,
+      {
+        method: 'DELETE',
+        headers: authed(token),
+      }
+    )
     expect(res.status).toBe(200)
-    const again = await fetch(`${baseUrl}/api/comments/${globalThis.__pendingId}`, {
-      method: 'DELETE',
-      headers: authed(token),
-    })
+    const again = await fetch(
+      `${baseUrl}/api/comments/${globalThis.__pendingId}`,
+      {
+        method: 'DELETE',
+        headers: authed(token),
+      }
+    )
     expect(again.status).toBe(404)
   })
 })
@@ -512,14 +981,17 @@ describe('第三梯队: Webhook、多渠道分发与 RBAC', () => {
   })
 
   it('PATCH /api/channels/:name 配置 Webhook 地址与自动推送开关', async () => {
-    const res = await fetch(`${baseUrl}/api/channels/${encodeURIComponent('个人网站')}`, {
-      method: 'PATCH',
-      headers: authed(token),
-      body: JSON.stringify({
-        webhookUrl: 'https://example.com/api/webhook',
-        autoPush: true,
-      }),
-    })
+    const res = await fetch(
+      `${baseUrl}/api/channels/${encodeURIComponent('个人网站')}`,
+      {
+        method: 'PATCH',
+        headers: authed(token),
+        body: JSON.stringify({
+          webhookUrl: 'https://example.com/api/webhook',
+          autoPush: true,
+        }),
+      }
+    )
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.webhookUrl).toBe('https://example.com/api/webhook')
@@ -527,13 +999,16 @@ describe('第三梯队: Webhook、多渠道分发与 RBAC', () => {
   })
 
   it('POST /api/channels/:name/test-webhook 连通性测试', async () => {
-    const res = await fetch(`${baseUrl}/api/channels/${encodeURIComponent('个人网站')}/test-webhook`, {
-      method: 'POST',
-      headers: authed(token),
-      body: JSON.stringify({
-        webhookUrl: '', // 传空时触发模拟成功
-      }),
-    })
+    const res = await fetch(
+      `${baseUrl}/api/channels/${encodeURIComponent('个人网站')}/test-webhook`,
+      {
+        method: 'POST',
+        headers: authed(token),
+        body: JSON.stringify({
+          webhookUrl: '', // 传空时触发模拟成功
+        }),
+      }
+    )
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.ok).toBe(true)
@@ -554,9 +1029,12 @@ describe('第三梯队: Webhook、多渠道分发与 RBAC', () => {
     expect(body.results.length).toBeGreaterThan(0)
 
     // 验证日志查询
-    const logRes = await fetch(`${baseUrl}/api/distribution/logs?articleId=ART-001`, {
-      headers: authed(token),
-    })
+    const logRes = await fetch(
+      `${baseUrl}/api/distribution/logs?articleId=ART-001`,
+      {
+        headers: authed(token),
+      }
+    )
     const logBody = await logRes.json()
     expect(logBody.data.length).toBeGreaterThan(0)
     expect(logBody.data[0].articleId).toBe('ART-001')
@@ -585,3 +1063,403 @@ describe('第三梯队: Webhook、多渠道分发与 RBAC', () => {
   })
 })
 
+describe('服务端 RBAC: 角色、文章归属与越权拦截', () => {
+  let adminToken
+  let authorToken
+  let authorId
+  let editorToken
+
+  const registerUser = async (email, name) => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: 'password123', name }),
+    })
+    return { status: res.status, body: await res.json() }
+  }
+
+  const setRole = (token, role) =>
+    fetch(`${baseUrl}/api/auth/me`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify({ role }),
+    })
+
+  beforeAll(async () => {
+    adminToken = (await (await login()).json()).accessToken
+
+    const author = await registerUser('rbac-author@test.dev', '权限测试作者')
+    authorToken = author.body.accessToken
+    authorId = author.body.user.id
+
+    const editor = await registerUser('rbac-editor@test.dev', '权限测试主编')
+    await setRole(editor.body.accessToken, 'editor')
+    editorToken = editor.body.accessToken
+  })
+
+  it('公开注册的默认角色是 author', async () => {
+    const { status, body } = await registerUser(
+      'rbac-default@test.dev',
+      '默认角色'
+    )
+    expect(status).toBe(201)
+    expect(body.user.role).toBe('author')
+  })
+
+  it('author 不能直接创建已发布文章', async () => {
+    const res = await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(authorToken),
+      body: JSON.stringify({
+        id: 'ART-RBAC-AUTHOR-PUB',
+        title: '越权发布',
+        excerpt: '',
+        content: '',
+        status: 'published',
+        category: 'tech',
+      }),
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('author 只能编辑自己的文章,且不能直接发布', async () => {
+    const created = await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(authorToken),
+      body: JSON.stringify({
+        id: 'ART-RBAC-AUTHOR',
+        title: '作者草稿',
+        excerpt: '',
+        content: '',
+        status: 'draft',
+        category: 'tech',
+      }),
+    })
+    expect(created.status).toBe(201)
+    const createdBody = await created.json()
+    expect(createdBody.authorId).toBe(authorId)
+
+    const submit = await fetch(`${baseUrl}/api/articles/ART-RBAC-AUTHOR`, {
+      method: 'PATCH',
+      headers: authed(authorToken),
+      body: JSON.stringify({ status: 'in_review' }),
+    })
+    expect(submit.status).toBe(200)
+
+    const publish = await fetch(`${baseUrl}/api/articles/ART-RBAC-AUTHOR`, {
+      method: 'PATCH',
+      headers: authed(authorToken),
+      body: JSON.stringify({ status: 'published' }),
+    })
+    expect(publish.status).toBe(403)
+
+    // 管理员名下的文章不可被作者修改
+    const other = await fetch(`${baseUrl}/api/articles/ART-001`, {
+      method: 'PATCH',
+      headers: authed(authorToken),
+      body: JSON.stringify({ title: '越权改名' }),
+    })
+    expect(other.status).toBe(403)
+  })
+
+  it('author 不能删除文章,也不能触发分发', async () => {
+    const del = await fetch(`${baseUrl}/api/articles/ART-RBAC-AUTHOR`, {
+      method: 'DELETE',
+      headers: authed(authorToken),
+    })
+    expect(del.status).toBe(403)
+
+    const dispatch = await fetch(`${baseUrl}/api/distribution/dispatch`, {
+      method: 'POST',
+      headers: authed(authorToken),
+      body: JSON.stringify({ articleId: 'ART-RBAC-AUTHOR' }),
+    })
+    expect(dispatch.status).toBe(403)
+  })
+
+  it('editor 可编辑他人文章,但不可删除他人文章', async () => {
+    const created = await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(adminToken),
+      body: JSON.stringify({
+        id: 'ART-RBAC-ADMIN',
+        title: '管理员文章',
+        excerpt: '',
+        content: '',
+        status: 'draft',
+        category: 'tech',
+      }),
+    })
+    expect(created.status).toBe(201)
+
+    const edit = await fetch(`${baseUrl}/api/articles/ART-RBAC-ADMIN`, {
+      method: 'PATCH',
+      headers: authed(editorToken),
+      body: JSON.stringify({ status: 'in_review' }),
+    })
+    expect(edit.status).toBe(200)
+
+    const del = await fetch(`${baseUrl}/api/articles/ART-RBAC-ADMIN`, {
+      method: 'DELETE',
+      headers: authed(editorToken),
+    })
+    expect(del.status).toBe(403)
+  })
+
+  it('editor 可删除自己的文章', async () => {
+    const created = await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(editorToken),
+      body: JSON.stringify({
+        id: 'ART-RBAC-EDITOR',
+        title: '主编文章',
+        excerpt: '',
+        content: '',
+        status: 'published',
+        category: 'tech',
+      }),
+    })
+    expect(created.status).toBe(201)
+
+    const del = await fetch(`${baseUrl}/api/articles/ART-RBAC-EDITOR`, {
+      method: 'DELETE',
+      headers: authed(editorToken),
+    })
+    expect(del.status).toBe(200)
+  })
+
+  it('admin 可删除任意文章(收尾清理)', async () => {
+    for (const id of ['ART-RBAC-ADMIN', 'ART-RBAC-AUTHOR']) {
+      const del = await fetch(`${baseUrl}/api/articles/${id}`, {
+        method: 'DELETE',
+        headers: authed(adminToken),
+      })
+      expect(del.status).toBe(200)
+    }
+  })
+})
+
+describe('自动分发:仅命中开启 auto_push 的渠道', () => {
+  let token
+
+  const patchChannel = (name, body) =>
+    fetch(`${baseUrl}/api/channels/${encodeURIComponent(name)}`, {
+      method: 'PATCH',
+      headers: authed(token),
+      body: JSON.stringify(body),
+    })
+
+  beforeAll(async () => {
+    token = (await (await login()).json()).accessToken
+  })
+
+  it('排期自动发布只向 auto_push 渠道分发,手动分发不受限', async () => {
+    // 清除前序用例留下的真实 webhook,避免测试发起外网请求
+    await patchChannel('个人网站', { webhookUrl: null, autoPush: false })
+    await patchChannel('微信公众号', { autoPush: true })
+
+    const pastDate = new Date(Date.now() - 60000).toISOString()
+    const created = await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        id: 'ART-AUTOPUSH-1',
+        title: '自动分发测试',
+        excerpt: '',
+        content: '',
+        status: 'scheduled',
+        category: 'tech',
+        scheduledAt: pastDate,
+      }),
+    })
+    expect(created.status).toBe(201)
+
+    checkAndPublishScheduledArticles()
+
+    const logs = await (
+      await fetch(`${baseUrl}/api/distribution/logs?articleId=ART-AUTOPUSH-1`, {
+        headers: authed(token),
+      })
+    ).json()
+    expect(logs.data.length).toBeGreaterThan(0)
+    expect(logs.data.every((log) => log.channelName === '微信公众号')).toBe(
+      true
+    )
+
+    // 手动分发仍覆盖全部已绑定渠道
+    const manual = await fetch(`${baseUrl}/api/distribution/dispatch`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({ articleId: 'ART-AUTOPUSH-1' }),
+    })
+    const manualBody = await manual.json()
+    const channelNames = manualBody.results.map((r) => r.channel)
+    expect(channelNames).toContain('微信公众号')
+    expect(channelNames).toContain('知乎')
+    expect(channelNames).toContain('个人网站')
+
+    // 清理
+    await patchChannel('微信公众号', { autoPush: false })
+    await fetch(`${baseUrl}/api/articles/ART-AUTOPUSH-1`, {
+      method: 'DELETE',
+      headers: authed(token),
+    })
+  })
+})
+
+describe('操作审计日志', () => {
+  const auditEmail = 'audit-author@test.dev'
+  let adminToken
+  let authorToken
+
+  const listLogs = (query = '') =>
+    fetch(`${baseUrl}/api/audit-logs?pageSize=100&${query}`, {
+      headers: authed(adminToken),
+    })
+
+  beforeAll(async () => {
+    adminToken = (await (await login()).json()).accessToken
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: auditEmail,
+        password: 'password123',
+        name: '审计作者',
+      }),
+    })
+    authorToken = (await res.json()).accessToken
+  })
+
+  it('非管理员访问返回 403', async () => {
+    const res = await fetch(`${baseUrl}/api/audit-logs`, {
+      headers: authed(authorToken),
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('管理员可分页查询且返回操作者信息', async () => {
+    const res = await fetch(`${baseUrl}/api/audit-logs?page=1&pageSize=5`, {
+      headers: authed(adminToken),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.total).toBeGreaterThan(0)
+    expect(body.data.length).toBeLessThanOrEqual(5)
+    expect(body.data[0]).toHaveProperty('action')
+    expect(body.data[0]).toHaveProperty('actorEmail')
+  })
+
+  it('文章创建/状态流转/删除都会留痕', async () => {
+    await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(adminToken),
+      body: JSON.stringify({
+        id: 'ART-AUDIT-1',
+        title: '审计测试文章',
+        excerpt: '',
+        content: '',
+        status: 'draft',
+        category: 'tech',
+      }),
+    })
+    await fetch(`${baseUrl}/api/articles/ART-AUDIT-1`, {
+      method: 'PATCH',
+      headers: authed(adminToken),
+      body: JSON.stringify({ status: 'in_review' }),
+    })
+
+    const afterStatus = await (
+      await listLogs('entityType=article&action=article.status_change')
+    ).json()
+    const statusLog = afterStatus.data.find(
+      (log) => log.entityId === 'ART-AUDIT-1'
+    )
+    expect(statusLog).toBeTruthy()
+    expect(statusLog.detail).toMatchObject({ from: 'draft', to: 'in_review' })
+    expect(statusLog.actorEmail).toBe('creator@studio.dev')
+
+    await fetch(`${baseUrl}/api/articles/ART-AUDIT-1`, {
+      method: 'DELETE',
+      headers: authed(adminToken),
+    })
+    const afterDelete = await (
+      await listLogs('entityType=article&action=article.delete')
+    ).json()
+    const deleteLog = afterDelete.data.find(
+      (log) => log.entityId === 'ART-AUDIT-1'
+    )
+    expect(deleteLog).toBeTruthy()
+    expect(deleteLog.detail.title).toBe('审计测试文章')
+  })
+
+  it('渠道配置更新与分发触发会留痕', async () => {
+    await fetch(`${baseUrl}/api/channels/${encodeURIComponent('B 站')}`, {
+      method: 'PATCH',
+      headers: authed(adminToken),
+      body: JSON.stringify({ autoPush: false }),
+    })
+    const channelLogs = await (
+      await listLogs('entityType=channel&action=channel.update')
+    ).json()
+    expect(channelLogs.data.some((log) => log.entityId === 'B 站')).toBe(true)
+
+    const created = await fetch(`${baseUrl}/api/articles`, {
+      method: 'POST',
+      headers: authed(adminToken),
+      body: JSON.stringify({
+        id: 'ART-AUDIT-2',
+        title: '审计分发文章',
+        excerpt: '',
+        content: '',
+        status: 'published',
+        category: 'tech',
+      }),
+    })
+    expect(created.status).toBe(201)
+
+    await fetch(`${baseUrl}/api/distribution/dispatch`, {
+      method: 'POST',
+      headers: authed(adminToken),
+      body: JSON.stringify({ articleId: 'ART-AUDIT-2' }),
+    })
+    const dispatchLogs = await (
+      await listLogs('action=distribution.dispatch')
+    ).json()
+    expect(
+      dispatchLogs.data.some((log) => log.entityId === 'ART-AUDIT-2')
+    ).toBe(true)
+
+    await fetch(`${baseUrl}/api/articles/ART-AUDIT-2`, {
+      method: 'DELETE',
+      headers: authed(adminToken),
+    })
+  })
+
+  it('角色变更与修改密码会留痕,并支持按操作者过滤', async () => {
+    const roleRes = await fetch(`${baseUrl}/api/auth/me`, {
+      method: 'PATCH',
+      headers: authed(authorToken),
+      body: JSON.stringify({ role: 'editor' }),
+    })
+    expect(roleRes.status).toBe(200)
+
+    const pwRes = await fetch(`${baseUrl}/api/auth/change-password`, {
+      method: 'POST',
+      headers: authed(authorToken),
+      body: JSON.stringify({
+        currentPassword: 'password123',
+        newPassword: 'audit-new-pass1',
+      }),
+    })
+    expect(pwRes.status).toBe(200)
+
+    const logs = await (
+      await listLogs(`actor=${encodeURIComponent(auditEmail)}`)
+    ).json()
+    const actions = logs.data.map((log) => log.action)
+    expect(actions).toContain('user.role_change')
+    expect(actions).toContain('auth.change_password')
+    expect(logs.data.every((log) => log.actorEmail === auditEmail)).toBe(true)
+  })
+})

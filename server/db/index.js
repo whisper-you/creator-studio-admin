@@ -1,9 +1,11 @@
-import { DatabaseSync } from 'node:sqlite'
+import { hashSync } from 'bcryptjs'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
-import { hashSync } from 'bcryptjs'
+import { resolveSeedPolicy } from '../services/seed-policy.js'
 import { buildSeedArticles } from './seed.js'
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // DATA_DIR 可覆盖存储位置(测试用临时目录)，生产默认落盘在 server/data
 const dataDir = process.env.DATA_DIR ?? join(__dirname, '../data')
@@ -48,6 +50,7 @@ db.exec(`
     likes        INTEGER NOT NULL DEFAULT 0,
     scheduled_at TEXT,
     published_at TEXT,
+    version      INTEGER NOT NULL DEFAULT 1,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
   );
@@ -85,6 +88,19 @@ db.exec(`
     message       TEXT,
     created_at    TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id    TEXT,
+    actor_email TEXT,
+    actor_role  TEXT,
+    action      TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id   TEXT,
+    detail      TEXT,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_audit_logs_created
+    ON audit_logs (created_at DESC);
 `)
 
 // 平滑数据库迁移:为旧库补充新列
@@ -97,17 +113,34 @@ try {
 } catch (_) {}
 
 try {
+  db.exec(
+    'ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 1'
+  )
+} catch (_) {}
+
+try {
   db.exec('ALTER TABLE channels ADD COLUMN webhook_url TEXT')
 } catch (_) {}
 
 try {
-  db.exec('ALTER TABLE channels ADD COLUMN auto_push INTEGER NOT NULL DEFAULT 0')
+  db.exec(
+    'ALTER TABLE channels ADD COLUMN auto_push INTEGER NOT NULL DEFAULT 0'
+  )
+} catch (_) {}
+
+try {
+  db.exec('ALTER TABLE articles ADD COLUMN author_id INTEGER')
+} catch (_) {}
+
+try {
+  db.exec('ALTER TABLE articles ADD COLUMN version INTEGER NOT NULL DEFAULT 1')
 } catch (_) {}
 
 export function articleRowToJson(row) {
   if (!row) return null
   return {
     id: row.id,
+    authorId: row.author_id == null ? undefined : String(row.author_id),
     title: row.title,
     excerpt: row.excerpt,
     content: row.content,
@@ -119,26 +152,43 @@ export function articleRowToJson(row) {
     likes: row.likes,
     scheduledAt: row.scheduled_at ?? undefined,
     publishedAt: row.published_at ?? undefined,
+    version: row.version ?? 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
 
 // ========== 初始化种子数据(仅首次) ==========
+const seedPolicy = resolveSeedPolicy()
 const userCount = db.prepare('SELECT COUNT(*) AS c FROM users').get().c
 if (userCount === 0) {
-  db.prepare(
-    'INSERT INTO users (email, name, password_hash, created_at) VALUES (?, ?, ?, ?)'
-  ).run(
-    'creator@studio.dev',
-    '创作者',
-    hashSync('creator123', 10),
-    new Date().toISOString()
-  )
+  if (seedPolicy.demo) {
+    db.prepare(
+      "INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?, ?, ?, 'admin', ?)"
+    ).run(
+      'creator@studio.dev',
+      '创作者',
+      hashSync('creator123', 10),
+      new Date().toISOString()
+    )
+  } else if (seedPolicy.admin) {
+    db.prepare(
+      "INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?, ?, ?, 'admin', ?)"
+    ).run(
+      seedPolicy.admin.email,
+      seedPolicy.admin.name,
+      hashSync(seedPolicy.admin.password, 10),
+      new Date().toISOString()
+    )
+  } else {
+    throw new Error(
+      '空库首次启动需要管理员账号:请设置 ADMIN_EMAIL 与 ADMIN_PASSWORD,或显式开启 SEED_DEMO_DATA=true'
+    )
+  }
 }
 
 const articleCount = db.prepare('SELECT COUNT(*) AS c FROM articles').get().c
-if (articleCount === 0) {
+if (seedPolicy.demo && articleCount === 0) {
   const insert = db.prepare(`
     INSERT INTO articles
       (id, title, excerpt, content, status, category, tags, platforms,
@@ -167,26 +217,81 @@ if (articleCount === 0) {
 const channelCount = db.prepare('SELECT COUNT(*) AS c FROM channels').get().c
 if (channelCount === 0) {
   const seedChannels = [
-    { name: '个人网站', account: 'blog.example.com', desc: '自建博客与作品集,内容资产的主阵地。', connected: 1 },
-    { name: '微信公众号', account: 'CreatorStudio', desc: '深度长文首发平台,支持粉丝留言互动。', connected: 1 },
-    { name: '知乎', account: '@creator-studio', desc: '技术问答与专栏,长尾搜索流量稳定。', connected: 1 },
-    { name: '小红书', account: null, desc: '图文笔记种草,适合教程与工具分享。', connected: 0 },
-    { name: '掘金', account: null, desc: '中文开发者社区,技术文章沉淀好去处。', connected: 0 },
-    { name: 'B 站', account: null, desc: '视频与图文动态,年轻用户聚集地。', connected: 0 },
-    { name: '即刻', account: null, desc: '独立开发者圈子,短内容快速分发。', connected: 0 },
-    { name: '邮件订阅', account: null, desc: '私有订阅列表,不依赖平台算法。', connected: 0 },
+    {
+      name: '个人网站',
+      account: 'blog.example.com',
+      desc: '自建博客与作品集,内容资产的主阵地。',
+      connected: 1,
+    },
+    {
+      name: '微信公众号',
+      account: 'CreatorStudio',
+      desc: '深度长文首发平台,支持粉丝留言互动。',
+      connected: 1,
+    },
+    {
+      name: '知乎',
+      account: '@creator-studio',
+      desc: '技术问答与专栏,长尾搜索流量稳定。',
+      connected: 1,
+    },
+    {
+      name: '小红书',
+      account: null,
+      desc: '图文笔记种草,适合教程与工具分享。',
+      connected: 0,
+    },
+    {
+      name: '掘金',
+      account: null,
+      desc: '中文开发者社区,技术文章沉淀好去处。',
+      connected: 0,
+    },
+    {
+      name: 'B 站',
+      account: null,
+      desc: '视频与图文动态,年轻用户聚集地。',
+      connected: 0,
+    },
+    {
+      name: '即刻',
+      account: null,
+      desc: '独立开发者圈子,短内容快速分发。',
+      connected: 0,
+    },
+    {
+      name: '邮件订阅',
+      account: null,
+      desc: '私有订阅列表,不依赖平台算法。',
+      connected: 0,
+    },
   ]
+  if (!seedPolicy.demo) {
+    // 生产环境只写入渠道定义,不预置演示账号与连接状态
+    seedChannels.forEach((channel) => {
+      channel.account = null
+      channel.connected = 0
+    })
+  }
   const insertChannel = db.prepare(
     'INSERT INTO channels (name, account, desc, connected) VALUES (@name, @account, @desc, @connected)'
   )
-  withTransaction((rows) => rows.forEach((row) => insertChannel.run(row)))(seedChannels)
+  withTransaction((rows) => rows.forEach((row) => insertChannel.run(row)))(
+    seedChannels
+  )
 }
 
 const materialCount = db.prepare('SELECT COUNT(*) AS c FROM materials').get().c
-if (materialCount === 0) {
+if (seedPolicy.demo && materialCount === 0) {
   const seedMaterials = [
     ['数字冲突式标题公式', '标题公式', '技术干货类文章起标题', 42, 'active'],
-    ['「我如何用 X 做 Y」叙事标题', '标题公式', '教程与复盘类内容', 31, 'active'],
+    [
+      '「我如何用 X 做 Y」叙事标题',
+      '标题公式',
+      '教程与复盘类内容',
+      31,
+      'active',
+    ],
     ['疑问句钩子标题公式', '标题公式', '观点与随笔类内容', 18, 'active'],
     ['极简白底封面模板', '封面模板', '知乎 / 掘金技术文章', 27, 'active'],
     ['大字报风格封面(3:4)', '封面模板', '小红书图文笔记', 22, 'active'],
@@ -201,19 +306,29 @@ if (materialCount === 0) {
   const insertMaterial = db.prepare(
     'INSERT INTO materials (name, type, scene, usage_count, status) VALUES (?, ?, ?, ?, ?)'
   )
-  withTransaction((rows) => rows.forEach((r) => insertMaterial.run(...r)))(seedMaterials)
+  withTransaction((rows) => rows.forEach((r) => insertMaterial.run(...r)))(
+    seedMaterials
+  )
 }
 
 // ========== 评论种子:挂在已发布文章上,状态混合供审核演示 ==========
 const commentCount = db.prepare('SELECT COUNT(*) AS c FROM comments').get().c
-if (commentCount === 0) {
+if (seedPolicy.demo && commentCount === 0) {
   const publishedIds = db
     .prepare("SELECT id FROM articles WHERE status = 'published' ORDER BY id")
     .all()
     .map((r) => r.id)
   const authors = [
-    '码农阿伟', '前端小林', '产品经理大周', '独立开发者 Ken', '写作爱好者小鹿',
-    '设计师 Mia', '数据分析师老王', '研究生小赵', '创业者阿彬', '教师莉莉',
+    '码农阿伟',
+    '前端小林',
+    '产品经理大周',
+    '独立开发者 Ken',
+    '写作爱好者小鹿',
+    '设计师 Mia',
+    '数据分析师老王',
+    '研究生小赵',
+    '创业者阿彬',
+    '教师莉莉',
   ]
   const contents = [
     '写得太细了,照着做一遍直接跑通了,感谢!',
@@ -227,7 +342,18 @@ if (commentCount === 0) {
     '观点不太同意,不过写得很清晰,支持交流。',
     '求出个视频版,文字看着还是费劲。',
   ]
-  const statuses = ['approved', 'approved', 'pending', 'approved', 'pending', 'rejected', 'approved', 'pending', 'approved', 'pending']
+  const statuses = [
+    'approved',
+    'approved',
+    'pending',
+    'approved',
+    'pending',
+    'rejected',
+    'approved',
+    'pending',
+    'approved',
+    'pending',
+  ]
   const insertComment = db.prepare(
     'INSERT INTO comments (article_id, author, content, status, created_at) VALUES (?, ?, ?, ?, ?)'
   )
@@ -250,4 +376,12 @@ if (commentCount === 0) {
       }
     })
   })()
+}
+
+// ========== 文章归属回填:历史数据与种子数据统一挂到首个用户(种子管理员)名下 ==========
+const owner = db.prepare('SELECT id FROM users ORDER BY id LIMIT 1').get()
+if (owner) {
+  db.prepare('UPDATE articles SET author_id = ? WHERE author_id IS NULL').run(
+    owner.id
+  )
 }

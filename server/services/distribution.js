@@ -2,15 +2,26 @@ import { db } from '../db/index.js'
 
 /**
  * 将文章分发至指定或已绑定的发布渠道 (Webhook 推送 / 模拟通道)
+ * @param {object} article
+ * @param {string[] | null} specificChannels 显式指定渠道;为空时按分发场景自动选择
+ * @param {{ autoPushOnly?: boolean }} options autoPushOnly 用于排期自动发布,只命开启自动推送的渠道
  */
-export async function dispatchArticle(article, specificChannels = null) {
+export async function dispatchArticle(
+  article,
+  specificChannels = null,
+  { autoPushOnly = false } = {}
+) {
   if (!article) return []
 
-  // 查询已绑定的渠道
-  const allChannels = db.prepare('SELECT * FROM channels WHERE connected = 1').all()
-  const targetChannels = specificChannels && specificChannels.length > 0
-    ? allChannels.filter((c) => specificChannels.includes(c.name))
-    : allChannels
+  // 查询已绑定的渠道;自动发布场景额外过滤 auto_push 开关
+  const channelSql = autoPushOnly
+    ? 'SELECT * FROM channels WHERE connected = 1 AND auto_push = 1'
+    : 'SELECT * FROM channels WHERE connected = 1'
+  const allChannels = db.prepare(channelSql).all()
+  const targetChannels =
+    specificChannels && specificChannels.length > 0
+      ? allChannels.filter((c) => specificChannels.includes(c.name))
+      : allChannels
 
   const results = []
   const insertLog = db.prepare(`
@@ -28,8 +39,12 @@ export async function dispatchArticle(article, specificChannels = null) {
         title: article.title,
         excerpt: article.excerpt,
         content: article.content,
-        tags: Array.isArray(article.tags) ? article.tags : JSON.parse(article.tags || '[]'),
-        platforms: Array.isArray(article.platforms) ? article.platforms : JSON.parse(article.platforms || '[]'),
+        tags: Array.isArray(article.tags)
+          ? article.tags
+          : JSON.parse(article.tags || '[]'),
+        platforms: Array.isArray(article.platforms)
+          ? article.platforms
+          : JSON.parse(article.platforms || '[]'),
         publishedAt: article.publishedAt || now,
       },
       channel: channel.name,
@@ -68,9 +83,17 @@ export async function dispatchArticle(article, specificChannels = null) {
           message,
           now
         )
-        results.push({ channel: channel.name, status, responseCode: res.status, message })
+        results.push({
+          channel: channel.name,
+          status,
+          responseCode: res.status,
+          message,
+        })
       } catch (err) {
-        const errorMsg = err.name === 'AbortError' ? '请求超时 (6s)' : (err.message || '网络连接失败')
+        const errorMsg =
+          err.name === 'AbortError'
+            ? '请求超时 (6s)'
+            : err.message || '网络连接失败'
         insertLog.run(
           article.id,
           article.title,
@@ -81,7 +104,12 @@ export async function dispatchArticle(article, specificChannels = null) {
           errorMsg,
           now
         )
-        results.push({ channel: channel.name, status: 'failed', responseCode: 504, message: errorMsg })
+        results.push({
+          channel: channel.name,
+          status: 'failed',
+          responseCode: 504,
+          message: errorMsg,
+        })
       }
     } else {
       // 模拟分发：开箱即用，无需外部网络配置
@@ -96,7 +124,12 @@ export async function dispatchArticle(article, specificChannels = null) {
         message,
         now
       )
-      results.push({ channel: channel.name, status: 'simulated', responseCode: 200, message })
+      results.push({
+        channel: channel.name,
+        status: 'simulated',
+        responseCode: 200,
+        message,
+      })
     }
   }
 
@@ -140,7 +173,9 @@ export async function testWebhook(channelName, webhookUrl) {
       ok: res.ok,
       status: res.ok ? 'success' : 'failed',
       statusCode: res.status,
-      message: res.ok ? `测试成功 (HTTP ${res.status})` : `目标返回异常 (HTTP ${res.status})`,
+      message: res.ok
+        ? `测试成功 (HTTP ${res.status})`
+        : `目标返回异常 (HTTP ${res.status})`,
       timestamp: now,
     }
   } catch (err) {
@@ -148,7 +183,10 @@ export async function testWebhook(channelName, webhookUrl) {
       ok: false,
       status: 'failed',
       statusCode: 504,
-      message: err.name === 'AbortError' ? '测试超时 (5s)' : (err.message || '网络请求失败'),
+      message:
+        err.name === 'AbortError'
+          ? '测试超时 (5s)'
+          : err.message || '网络请求失败',
       timestamp: now,
     }
   }
