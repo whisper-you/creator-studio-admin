@@ -41,6 +41,7 @@ creator-studio-admin/
 │   │   ├── seed-policy.js        # 演示数据开关与生产管理员引导策略
 │   │   ├── security.js           # Helmet 安全头、CORS 白名单与认证端点限流
 │   │   ├── distribution.js       # 多平台 Webhook 分发与通道拟真引擎
+│   │   ├── webhook-url.js        # Webhook 地址校验与 SSRF 防护（云元数据/私网拦截）
 │   │   └── scheduler.js          # 定时发布自动调度引擎 (Worker)
 │   ├── routes/                   # RESTful API 控制器路由层
 │   │   ├── auth.js               # 登录/注册/刷新/登出/改密吊销/RBAC 角色流转

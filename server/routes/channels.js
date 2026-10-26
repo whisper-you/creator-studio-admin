@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { db } from '../db/index.js'
 import { recordAudit } from '../services/audit.js'
 import { testWebhook } from '../services/distribution.js'
+import { validateWebhookUrl } from '../services/webhook-url.js'
 import { requireAuth, requireRole } from './auth.js'
 
 export const channelsRouter = Router()
@@ -50,11 +51,18 @@ channelsRouter.patch(
       return res.status(404).json({ message: '渠道不存在' })
     }
 
+    let nextWebhookUrl = current.webhook_url
+    if (webhookUrl !== undefined) {
+      const checked = validateWebhookUrl(webhookUrl)
+      if (!checked.ok) {
+        return res.status(400).json({ message: checked.message })
+      }
+      nextWebhookUrl = checked.url
+    }
+
     const nextConnected =
       connected !== undefined ? (connected ? 1 : 0) : current.connected
     const nextAccount = account !== undefined ? account : current.account
-    const nextWebhookUrl =
-      webhookUrl !== undefined ? webhookUrl : current.webhook_url
     const nextAutoPush =
       autoPush !== undefined ? (autoPush ? 1 : 0) : current.auto_push
 
@@ -114,9 +122,14 @@ channelsRouter.post(
       return res.status(404).json({ message: '渠道不存在' })
     }
 
-    const urlToTest =
+    const checked = validateWebhookUrl(
       webhookUrl !== undefined ? webhookUrl : channel.webhook_url
-    const result = await testWebhook(channel.name, urlToTest)
+    )
+    if (!checked.ok) {
+      return res.status(400).json({ message: checked.message })
+    }
+
+    const result = await testWebhook(channel.name, checked.url)
     res.json(result)
   }
 )

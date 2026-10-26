@@ -1,4 +1,5 @@
 import { db } from '../db/index.js'
+import { validateWebhookUrl } from './webhook-url.js'
 
 /**
  * 将文章分发至指定或已绑定的发布渠道 (Webhook 推送 / 模拟通道)
@@ -52,12 +53,33 @@ export async function dispatchArticle(
       timestamp: now,
     }
 
-    if (channel.webhook_url && channel.webhook_url.trim()) {
+    const checkedUrl = validateWebhookUrl(channel.webhook_url)
+    if (channel.webhook_url && channel.webhook_url.trim() && !checkedUrl.ok) {
+      insertLog.run(
+        article.id,
+        article.title,
+        channel.name,
+        channel.webhook_url,
+        'failed',
+        400,
+        checkedUrl.message,
+        now
+      )
+      results.push({
+        channel: channel.name,
+        status: 'failed',
+        responseCode: 400,
+        message: checkedUrl.message,
+      })
+      continue
+    }
+
+    if (checkedUrl.url) {
       try {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 6000)
 
-        const res = await fetch(channel.webhook_url, {
+        const res = await fetch(checkedUrl.url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -65,6 +87,7 @@ export async function dispatchArticle(
           },
           body: JSON.stringify(payload),
           signal: controller.signal,
+          redirect: 'manual',
         })
         clearTimeout(timeoutId)
 
@@ -77,7 +100,7 @@ export async function dispatchArticle(
           article.id,
           article.title,
           channel.name,
-          channel.webhook_url,
+          checkedUrl.url,
           status,
           res.status,
           message,
@@ -98,7 +121,7 @@ export async function dispatchArticle(
           article.id,
           article.title,
           channel.name,
-          channel.webhook_url,
+          checkedUrl.url,
           'failed',
           504,
           errorMsg,
@@ -141,7 +164,17 @@ export async function dispatchArticle(
  */
 export async function testWebhook(channelName, webhookUrl) {
   const now = new Date().toISOString()
-  if (!webhookUrl || !webhookUrl.trim()) {
+  const checked = validateWebhookUrl(webhookUrl)
+  if (!checked.ok) {
+    return {
+      ok: false,
+      status: 'failed',
+      statusCode: 400,
+      message: checked.message,
+      timestamp: now,
+    }
+  }
+  if (!checked.url) {
     return {
       ok: true,
       status: 'simulated',
@@ -153,7 +186,7 @@ export async function testWebhook(channelName, webhookUrl) {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
-    const res = await fetch(webhookUrl, {
+    const res = await fetch(checked.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -166,6 +199,7 @@ export async function testWebhook(channelName, webhookUrl) {
         timestamp: now,
       }),
       signal: controller.signal,
+      redirect: 'manual',
     })
     clearTimeout(timeoutId)
 

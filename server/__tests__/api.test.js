@@ -663,6 +663,40 @@ describe('渠道接口', () => {
     )
     expect(res.status).toBe(404)
   })
+
+  it('拒绝非法 Webhook 地址与云元数据地址', async () => {
+    const name = encodeURIComponent('个人网站')
+    const patch = (webhookUrl) =>
+      fetch(`${baseUrl}/api/channels/${name}`, {
+        method: 'PATCH',
+        headers: authed(token),
+        body: JSON.stringify({ webhookUrl }),
+      })
+
+    for (const webhookUrl of [
+      'file:///etc/passwd',
+      'https://user:pass@example.com/hook',
+      'http://169.254.169.254/latest/meta-data',
+      'http://[fe80::1]/hook',
+    ]) {
+      expect((await patch(webhookUrl)).status).toBe(400)
+    }
+
+    const saved = await patch('https://example.com/hook')
+    expect(saved.status).toBe(200)
+    expect((await saved.json()).webhookUrl).toBe('https://example.com/hook')
+    // 清空,避免影响后续分发用例
+    expect((await patch(null)).status).toBe(200)
+
+    const probe = await fetch(`${baseUrl}/api/channels/${name}/test-webhook`, {
+      method: 'POST',
+      headers: authed(token),
+      body: JSON.stringify({
+        webhookUrl: 'http://169.254.169.254/latest/meta-data',
+      }),
+    })
+    expect(probe.status).toBe(400)
+  })
 })
 
 describe('素材与统计接口', () => {
