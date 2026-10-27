@@ -18,6 +18,7 @@ process.env.AUTH_RATE_LIMIT_WINDOW_MS = '60000'
 process.env.REGISTER_RATE_LIMIT_MAX = '1'
 process.env.CHANGE_PASSWORD_RATE_LIMIT_MAX = '1'
 process.env.UPLOAD_RATE_LIMIT_MAX = '3'
+process.env.WEBHOOK_RATE_LIMIT_MAX = '2'
 
 const { app } = await import('../index.js')
 
@@ -91,6 +92,7 @@ describe('安全策略解析', () => {
     })
     expect(defaults.refresh).toEqual({ windowMs: 15 * 60_000, limit: 120 })
     expect(defaults.upload).toEqual({ windowMs: 60 * 60_000, limit: 30 })
+    expect(defaults.webhook).toEqual({ windowMs: 60_000, limit: 30 })
 
     const overridden = resolveRateLimits({
       AUTH_RATE_LIMIT_MAX: '7',
@@ -98,11 +100,13 @@ describe('安全策略解析', () => {
       REGISTER_RATE_LIMIT_MAX: 'not-a-number',
       CHANGE_PASSWORD_RATE_LIMIT_MAX: '0',
       UPLOAD_RATE_LIMIT_MAX: '5',
+      WEBHOOK_RATE_LIMIT_MAX: '9',
     })
     expect(overridden.login).toEqual({ windowMs: 1000, limit: 7 })
     expect(overridden.register.limit).toBe(5)
     expect(overridden.changePassword.limit).toBe(10)
     expect(overridden.upload.limit).toBe(5)
+    expect(overridden.webhook.limit).toBe(9)
   })
 })
 
@@ -255,6 +259,34 @@ describe('素材上传元数据与频率限制', () => {
     }
 
     const blocked = await upload({ dataUrl: tinyPng })
+    expect(blocked.status).toBe(429)
+    expect((await blocked.json()).message).toContain('请求过于频繁')
+  })
+})
+
+describe('Webhook 测试与分发限流', () => {
+  it('超过单用户 Webhook 测试频率后返回 429', async () => {
+    const authed = { Authorization: `Bearer ${token}` }
+    const escalate = await fetch(`${baseUrl}/api/auth/me`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authed },
+      body: JSON.stringify({ role: 'editor' }),
+    })
+    expect(escalate.status).toBe(200)
+
+    const probe = () =>
+      postJson(
+        `/api/channels/${encodeURIComponent('个人网站')}/test-webhook`,
+        {},
+        authed
+      )
+
+    for (let i = 0; i < 2; i += 1) {
+      const res = await probe()
+      expect(res.status).toBe(200)
+    }
+
+    const blocked = await probe()
     expect(blocked.status).toBe(429)
     expect((await blocked.json()).message).toContain('请求过于频繁')
   })

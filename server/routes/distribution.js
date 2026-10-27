@@ -6,10 +6,13 @@ import {
   dispatchArticle,
   getDistributionLogs,
 } from '../services/distribution.js'
+import { createWebhookLimiter } from '../services/security.js'
 import { requireAuth, requireRole } from './auth.js'
 
 export const distributionRouter = Router()
 distributionRouter.use(requireAuth)
+
+const webhookLimiter = createWebhookLimiter()
 
 /**
  * GET /api/distribution/logs
@@ -45,6 +48,7 @@ distributionRouter.get('/logs', (req, res) => {
 distributionRouter.post(
   '/dispatch',
   requireRole('admin', 'editor'),
+  webhookLimiter,
   async (req, res) => {
     const parsed = z
       .object({

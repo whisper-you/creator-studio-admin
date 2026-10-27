@@ -84,8 +84,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 - 图片以 Base64 形式提交到 `POST /api/materials/upload`，服务端解码后写入本地 `uploads/`，文件名由服务端生成。
 - 上传已做格式与大小校验：仅允许 PNG / JPEG / WebP / GIF，单文件上限 5 MB；服务端会校验文件头（魔数）并与声明的 MIME 交叉比对，SVG 及其他格式一律拒绝。前端上传入口同步限制文件类型与大小。
 - 上传元数据长度受限：`filename` ≤ 160、`name` ≤ 80、`scene` ≤ 40 字符，避免超长内容写入数据库。
-- 上传接口按登录用户限流，默认 30 次/小时，可通过 `UPLOAD_RATE_LIMIT_MAX` / `UPLOAD_RATE_LIMIT_WINDOW_MS` 调整；单进程内存计数，重启清零。
-- `uploads/` 通过 `express.static` 直接公开访问，不经过鉴权。
+- 上传接口按登录用户限流，默认 30 次/小时，可通过 `UPLOAD_RATE_LIMIT_MAX` / `UPLOAD_RATE_LIMIT_WINDOW_MS` 调整；单进程内存计数，重启清零。- `uploads/` 通过 `express.static` 直接公开访问，不经过鉴权。
 - JSON 请求体上限为 25 MB，Nginx 参考配置中 `client_max_body_size` 为 30 MB；实际单图仍受 5 MB 业务限制。非法 JSON 返回 400、超限请求体返回 413，均为 JSON 错误体而不会误报 500。
 
 **影响**
@@ -109,6 +108,7 @@ Docker 部署时这两个目录分别挂载为 `sqlite-data` 与 `uploads-data` 
 
 - 已绑定且填写 Webhook URL 的渠道会收到真实 `POST`（超时 6 秒），结果写入 `distribution_logs`。
 - Webhook 地址在保存、测试与分发时都会校验：仅允许 http/https、禁止内嵌账号密码、长度不超过 2048 字符，始终拒绝云元数据（如 `169.254.169.254`）与链路本地地址；`WEBHOOK_BLOCK_PRIVATE=true` 时额外拒绝本机/私网/内网域名。请求不自动跟随重定向，避免跳转到内部目标。
+- Webhook 连通性测试与手动分发按登录用户限流，默认 30 次/分钟，可通过 `WEBHOOK_RATE_LIMIT_MAX` / `WEBHOOK_RATE_LIMIT_WINDOW_MS` 调整；超限返回 429，避免反复触发外部请求或长时间占用事件循环。
 - 渠道列表中的 `webhookUrl` 与分发日志中的 `targetUrl` 只对 `admin` / `editor` 返回，作者角色只能看到渠道名称、连接状态与分发结果。
 - 未配置 Webhook 的渠道走**模拟分发**，日志状态为 `simulated`，并不会真的发布到微信、知乎等平台。
 - 没有重试、没有签名校验、没有幂等键、没有失败告警。

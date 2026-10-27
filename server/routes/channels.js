@@ -3,6 +3,7 @@ import { Router } from 'express'
 import { db } from '../db/index.js'
 import { recordAudit } from '../services/audit.js'
 import { testWebhook } from '../services/distribution.js'
+import { createWebhookLimiter } from '../services/security.js'
 import {
   validateWebhookUrl,
   MAX_WEBHOOK_URL_LENGTH,
@@ -11,6 +12,8 @@ import { requireAuth, requireRole } from './auth.js'
 
 export const channelsRouter = Router()
 channelsRouter.use(requireAuth)
+
+const webhookLimiter = createWebhookLimiter()
 
 const webhookUrlField = z
   .string()
@@ -113,6 +116,7 @@ channelsRouter.patch('/:name', requireRole('admin', 'editor'), (req, res) => {
 channelsRouter.post(
   '/:name/test-webhook',
   requireRole('admin', 'editor'),
+  webhookLimiter,
   async (req, res) => {
     const channel = db
       .prepare('SELECT * FROM channels WHERE name = ?')

@@ -55,6 +55,10 @@ export function resolveRateLimits(env = process.env) {
       windowMs: positiveInt(env.UPLOAD_RATE_LIMIT_WINDOW_MS, 60 * MINUTE),
       limit: positiveInt(env.UPLOAD_RATE_LIMIT_MAX, 30),
     },
+    webhook: {
+      windowMs: positiveInt(env.WEBHOOK_RATE_LIMIT_WINDOW_MS, MINUTE),
+      limit: positiveInt(env.WEBHOOK_RATE_LIMIT_MAX, 30),
+    },
   }
 }
 
@@ -84,6 +88,14 @@ export function createAuthLimiters(env = process.env) {
 export function createUploadLimiter(env = process.env) {
   return createLimiter({
     ...resolveRateLimits(env).upload,
+    keyGenerator: (req) => `user:${req.userId}`,
+  })
+}
+
+/** Webhook 测试与分发限流:按登录用户计数,避免反复触发外部请求 */
+export function createWebhookLimiter(env = process.env) {
+  return createLimiter({
+    ...resolveRateLimits(env).webhook,
     keyGenerator: (req) => `user:${req.userId}`,
   })
 }
