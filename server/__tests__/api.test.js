@@ -1431,6 +1431,33 @@ describe('评论接口', () => {
     expect(body.data.some((c) => c.status === 'pending')).toBe(true)
   })
 
+  it('GET 分页并返回总数,非法查询参数返回 400', async () => {
+    const first = await (
+      await fetch(`${baseUrl}/api/comments?page=1&pageSize=5`, {
+        headers: authed(token),
+      })
+    ).json()
+    expect(first.data).toHaveLength(5)
+    expect(first.page).toBe(1)
+    expect(first.pageSize).toBe(5)
+    expect(first.total).toBeGreaterThanOrEqual(first.data.length)
+
+    const second = await (
+      await fetch(`${baseUrl}/api/comments?page=2&pageSize=5`, {
+        headers: authed(token),
+      })
+    ).json()
+    const firstIds = new Set(first.data.map((c) => c.id))
+    expect(second.data.every((c) => !firstIds.has(c.id))).toBe(true)
+
+    for (const query of ['pageSize=101', 'page=0', 'status=unknown']) {
+      const res = await fetch(`${baseUrl}/api/comments?${query}`, {
+        headers: authed(token),
+      })
+      expect(res.status).toBe(400)
+    }
+  })
+
   it('GET ?status=pending 只返回待审', async () => {
     const res = await fetch(`${baseUrl}/api/comments?status=pending`, {
       headers: authed(token),

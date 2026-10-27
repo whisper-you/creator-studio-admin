@@ -9,7 +9,7 @@
 ![Express](https://img.shields.io/badge/Express-5-000000?style=flat-square&logo=express)
 ![SQLite](https://img.shields.io/badge/SQLite-node:sqlite-003B57?style=flat-square&logo=sqlite)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
-![Tests](https://img.shields.io/badge/Tests-169%20Passed-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-170%20Passed-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 <p align="center">
@@ -126,7 +126,7 @@
 - **多维动态时间走势**：支持在 **最近 7 天 / 30 天 / 90 天** 维度自由切换，阅读量、互动量与粉丝增长曲线联动渲染。
 - **环比洞察与核心指标**：自动计算周环比（WoW）增长率，提供互动深度指标看板。
 - **创作转化全链路漏斗**：直观展示「创作 → 发布 → 阅读 → 互动」各环节的漏斗留存率。
-- **读者评论审核流**：集中展示各渠道留言，支持一键审核通过、驳回违规留言或删除，支持联表关联原文章。
+- **读者评论审核流**：集中展示各渠道留言，支持按状态筛选与服务端分页（默认每页 20 条，最大 100 条），一键审核通过、驳回违规留言或删除，并支持联表关联原文章。
 
 ---
 
@@ -387,7 +387,7 @@ server {
 项目实施严苛的代码质量与自动化测试工程规范：
 
 ```bash
-# 执行后端 API 集成测试 (101 个用例覆盖登录鉴权、会话续期与登出、登录设备管理、改密吊销、管理员角色调整/停用启用/重置密码/强制下线、文章 CRUD/乐观锁、图床上传安全、Webhook 地址校验与字段可见性、RBAC、状态机、审计与自动分发)
+# 执行后端 API 集成测试 (102 个用例覆盖登录鉴权、会话续期与登出、登录设备管理、改密吊销、管理员角色调整/停用启用/重置密码/强制下线、文章 CRUD/乐观锁、图床上传安全、Webhook 地址校验与字段可见性、RBAC、状态机、审计与自动分发)
 pnpm test:server
 
 # 执行全量代码静态规范检查 (ESLint 9)
@@ -399,7 +399,7 @@ pnpm build
 
 当前测试运行结果：
 
-- `server/__tests__/api.test.js`：101 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、登录设备列表与撤销、管理员角色调整/停用启用/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、Webhook 地址校验与长度/参数类型拦截、字段可见性、文章输入规模上限、access token 算法约束、畸形路径与 Cookie 编码容错、作者指标篡改拦截、邮箱大小写归一化、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
+- `server/__tests__/api.test.js`：102 个 API 接口、refresh token 轮换与重放拦截、登出吊销、改密吊销、登录设备列表与撤销、管理员角色调整/停用启用/重置密码/强制下线与会话失效、乐观锁冲突、上传校验、Webhook 地址校验与长度/参数类型拦截、字段可见性、文章输入规模上限、评论分页与参数校验、access token 算法约束、畸形路径与 Cookie 编码容错、作者指标篡改拦截、邮箱大小写归一化、审计日志、状态机、RBAC 越权与自动分发过滤测试全部通过。
 - `server/__tests__/access-token.test.js`：3 个 HS256 算法固定、非 HS256 签名与 alg=none 拒绝测试全部通过。
 - `server/__tests__/webhook-url.test.js`：5 个 Webhook 协议、凭据、长度上限、云元数据/链路本地与私网拦截测试全部通过。
 - `server/__tests__/jwt-secret.test.js`：8 个 JWT 密钥解析与生产启动校验测试全部通过。
@@ -411,7 +411,7 @@ pnpm build
 - `src/features/articles/utils/wechat-formatter.test.ts`：4 个内联富文本转换与主题样式测试全部通过。
 - `src/features/articles/utils/ai-assistant.test.ts`：4 个本地启发式标题与摘要提取算法测试全部通过。
 - `src/features/articles/utils/export-article.test.ts`：3 个 Markdown 与打印报表导出测试全部通过。
-- **全套 169 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
+- **全套 170 项服务端/工具函数测试与 143 项前端浏览器测试全部通过，0 错误，0 警告。**
 
 ---
 

@@ -418,6 +418,9 @@ const commentListSchema = z.object({
       createdAt: z.string(),
     })
   ),
+  total: z.number(),
+  page: z.number(),
+  pageSize: z.number(),
 })
 
 export type CommentItem = z.infer<typeof commentListSchema>['data'][number]
@@ -523,10 +526,16 @@ export const statsApi = {
 }
 
 export const commentsApi = {
-  async list(status?: 'pending' | 'approved' | 'rejected') {
+  async list(
+    params: {
+      status?: 'pending' | 'approved' | 'rejected'
+      page?: number
+      pageSize?: number
+    } = {}
+  ) {
     return commentListSchema.parse(
-      (await api.get('/comments', { params: status ? { status } : {} })).data
-    ).data
+      (await api.get('/comments', { params })).data
+    )
   },
   async setStatus(id: string, status: 'approved' | 'rejected') {
     await api.patch(`/comments/${id}`, { status })
