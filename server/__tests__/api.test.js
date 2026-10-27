@@ -1498,6 +1498,31 @@ describe('评论接口', () => {
     )
     expect(again.status).toBe(404)
   })
+
+  it('评论审核与删除写入审计日志', async () => {
+    const moderated = await (
+      await fetch(`${baseUrl}/api/audit-logs?action=comment.moderate`, {
+        headers: authed(token),
+      })
+    ).json()
+    const row = moderated.data.find(
+      (item) => item.entityId === globalThis.__pendingId
+    )
+    expect(row).toMatchObject({
+      action: 'comment.moderate',
+      entityType: 'comment',
+    })
+    expect(row.detail).toMatchObject({ from: 'pending', to: 'approved' })
+
+    const deleted = await (
+      await fetch(`${baseUrl}/api/audit-logs?action=comment.delete`, {
+        headers: authed(token),
+      })
+    ).json()
+    expect(
+      deleted.data.some((item) => item.entityId === globalThis.__pendingId)
+    ).toBe(true)
+  })
 })
 
 describe('第三梯队: Webhook、多渠道分发与 RBAC', () => {

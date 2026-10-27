@@ -16,6 +16,8 @@ const ACTIONS = [
   'article.bulk_delete',
   'channel.update',
   'distribution.dispatch',
+  'comment.moderate',
+  'comment.delete',
 ]
 
 export { ACTIONS }

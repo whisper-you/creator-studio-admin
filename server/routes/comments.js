@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { Router } from 'express'
 import { db } from '../db/index.js'
+import { recordAudit } from '../services/audit.js'
 import { requireAuth, requireRole } from './auth.js'
 
 export const commentsRouter = Router()
@@ -63,11 +64,26 @@ commentsRouter.patch('/:id', requireRole('admin', 'editor'), (req, res) => {
     .safeParse(req.body)
   if (!parsed.success) return res.status(400).json({ message: '字段校验失败' })
 
-  const result = db
-    .prepare('UPDATE comments SET status = ? WHERE id = ?')
-    .run(parsed.data.status, req.params.id)
-  if (result.changes === 0)
-    return res.status(404).json({ message: '评论不存在' })
+  const before = db
+    .prepare('SELECT status, article_id FROM comments WHERE id = ?')
+    .get(req.params.id)
+  if (!before) return res.status(404).json({ message: '评论不存在' })
+
+  db.prepare('UPDATE comments SET status = ? WHERE id = ?').run(
+    parsed.data.status,
+    req.params.id
+  )
+
+  recordAudit(req, {
+    action: 'comment.moderate',
+    entityType: 'comment',
+    entityId: req.params.id,
+    detail: {
+      articleId: before.article_id,
+      from: before.status,
+      to: parsed.data.status,
+    },
+  })
 
   const row = db
     .prepare(
@@ -80,10 +96,19 @@ commentsRouter.patch('/:id', requireRole('admin', 'editor'), (req, res) => {
 })
 
 commentsRouter.delete('/:id', requireRole('admin', 'editor'), (req, res) => {
-  const result = db
-    .prepare('DELETE FROM comments WHERE id = ?')
-    .run(req.params.id)
-  if (result.changes === 0)
-    return res.status(404).json({ message: '评论不存在' })
-  res.json({ deleted: result.changes })
+  const before = db
+    .prepare('SELECT article_id FROM comments WHERE id = ?')
+    .get(req.params.id)
+  if (!before) return res.status(404).json({ message: '评论不存在' })
+
+  db.prepare('DELETE FROM comments WHERE id = ?').run(req.params.id)
+
+  recordAudit(req, {
+    action: 'comment.delete',
+    entityType: 'comment',
+    entityId: req.params.id,
+    detail: { articleId: before.article_id },
+  })
+
+  res.json({ deleted: 1 })
 })

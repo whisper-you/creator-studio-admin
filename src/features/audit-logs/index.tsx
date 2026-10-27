@@ -54,12 +54,15 @@ const actionLabels: Record<string, string> = {
   'article.bulk_delete': '批量删除文章',
   'channel.update': '渠道配置更新',
   'distribution.dispatch': '触发渠道分发',
+  'comment.moderate': '评论审核',
+  'comment.delete': '删除评论',
 }
 
 const entityLabels: Record<string, string> = {
   article: '文章',
   channel: '渠道',
   user: '用户',
+  comment: '评论',
 }
 
 const formatDetail = (detail: unknown) => {
