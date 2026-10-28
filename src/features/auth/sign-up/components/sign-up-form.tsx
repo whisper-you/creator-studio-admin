@@ -31,7 +31,10 @@ const formSchema = z
     password: z
       .string()
       .min(1, '请输入密码。')
-      .min(7, '密码至少需要 7 个字符。'),
+      .refine(
+        (value) => value.length === 0 || value.length >= 8,
+        '密码至少需要 8 个字符。'
+      ),
     confirmPassword: z.string().min(1, '请再次输入密码。'),
   })
   .refine((data) => data.password === data.confirmPassword, {

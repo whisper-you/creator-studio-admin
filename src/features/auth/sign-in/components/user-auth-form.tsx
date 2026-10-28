@@ -26,7 +26,7 @@ const formSchema = z.object({
   email: z.email({
     error: (iss) => (iss.input === '' ? '请输入邮箱地址。' : undefined),
   }),
-  password: z.string().min(1, '请输入密码。').min(7, '密码至少需要 7 个字符。'),
+  password: z.string().min(1, '请输入密码。'),
 })
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLFormElement> {

@@ -158,7 +158,10 @@ const resetPasswordSchema = z.object({
   newPassword: z
     .string()
     .min(8, '新密码至少需要 8 个字符')
-    .max(72, '新密码不能超过 72 个字符'),
+    .refine(
+      (value) => Buffer.byteLength(value, 'utf8') <= 72,
+      '新密码不能超过 72 字节'
+    ),
 })
 
 /**

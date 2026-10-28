@@ -106,6 +106,11 @@ export function requireRole(...roles) {
 export const authRouter = Router()
 
 const registerSchema = loginSchema.extend({
+  // bcrypt 只使用前 72 字节,超出部分会被静默截断,因此按字节限制上限
+  password: z
+    .string()
+    .min(8, '密码至少需要 8 个字符')
+    .refine((value) => Buffer.byteLength(value, 'utf8') <= 72, '密码不能超过 72 字节'),
   name: z.string().min(1).max(30).default('新创作者'),
 })
 
@@ -317,7 +322,10 @@ const changePasswordSchema = z.object({
   newPassword: z
     .string()
     .min(8, '新密码至少需要 8 个字符')
-    .max(72, '新密码不能超过 72 个字符'),
+    .refine(
+      (value) => Buffer.byteLength(value, 'utf8') <= 72,
+      '新密码不能超过 72 字节'
+    ),
 })
 
 /**
